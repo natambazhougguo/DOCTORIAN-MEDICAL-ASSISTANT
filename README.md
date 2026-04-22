@@ -43,7 +43,7 @@ This project was developed by **AKORA JOSEPH** from **Dr. Obote College**. It is
 - **Anatomical Illustrator**: AI-generated medical illustrations.
 
 ---
-*Developed by AKORA JOSEPH (Dr. Obote College)*
+*Developed by AKORA JOSEPH AND ASSISTED BY NATAMBA ZHOUGGUO (Dr. Obote College)*
 *Headteacher: Mr. ALENGO DICK*
 *Deputy Administration: Mr. Ogwang Tom*
 *Deputy in charge Academics: Mr. Okumu Samuel*
