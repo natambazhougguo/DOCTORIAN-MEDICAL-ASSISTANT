@@ -1,6 +1,6 @@
 # Doctorian AI - Local Setup Guide
 
-This project was developed by **AKORA JOSEPH** from **Dr. Obote College**. It is a professional medical intelligence companion designed to provide evidence-based health insights.
+This project was developed by **AKORA JOSEPH AND NATAMBA ZHOUGGUO ** from **Dr. Obote College**. It is a professional medical intelligence companion designed to provide evidence-based health insights.
 
 ## Prerequisites
 
