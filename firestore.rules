@@ -1,0 +1,130 @@
+rules_version = '2';
+
+// ===============================================================
+// Assumed Data Model
+// ===============================================================
+//
+// Collection: users
+// Document ID: {userId}
+// Fields:
+//   - uid: string (required, immutable) - The unique ID of the user.
+//   - displayName: string (optional) - The user's display name.
+//   - email: string (required, immutable) - The user's email address.
+//   - photoURL: string (optional) - The user's profile photo URL.
+//   - role: string (required) - The user's role (user/admin).
+//   - createdAt: string (required, immutable) - The timestamp when the profile was created.
+//
+// Collection: users/{userId}/records
+// Document ID: {recordId}
+// Fields:
+//   - id: string (required, immutable) - The unique ID of the record.
+//   - uid: string (required, immutable) - The ID of the user who owns this record.
+//   - type: string (required) - The type of health record.
+//   - value: string (required) - The value of the measurement.
+//   - unit: string (optional) - The unit of measurement.
+//   - date: string (required) - The timestamp of the measurement.
+//   - notes: string (optional) - Optional notes for the record.
+//
+// ===============================================================
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ===============================================================
+    // Helper Functions
+    // ===============================================================
+    
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    function isAdmin() {
+      return isAuthenticated() &&
+        (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin' ||
+          (request.auth.token.email == "gloriajayakullo@gmail.com" && request.auth.token.email_verified == true));
+    }
+
+    function isValidEmail(email) {
+      return email is string &&
+        email.matches("^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$");
+    }
+
+    function hasOnlyAllowedFields(fields) {
+      return request.resource.data.keys().hasOnly(fields);
+    }
+
+    function hasRequiredFields(fields) {
+      return request.resource.data.keys().hasAll(fields);
+    }
+
+    // ===============================================================
+    // Domain Validators
+    // ===============================================================
+
+    function isValidUser(data) {
+      return hasRequiredFields(['uid', 'email', 'role', 'createdAt']) &&
+             hasOnlyAllowedFields(['uid', 'displayName', 'email', 'photoURL', 'role', 'createdAt']) &&
+             data.uid is string && data.uid.size() > 0 && data.uid.size() < 128 &&
+             data.email is string && isValidEmail(data.email) &&
+             data.role in ['user', 'admin'] &&
+             data.createdAt is string;
+    }
+
+    function isValidRecord(data) {
+      return hasRequiredFields(['id', 'uid', 'type', 'value', 'date']) &&
+             hasOnlyAllowedFields(['id', 'uid', 'type', 'value', 'unit', 'date', 'notes']) &&
+             data.id is string && data.id.size() > 0 && data.id.size() < 128 &&
+             data.uid is string && data.uid.size() > 0 && data.uid.size() < 128 &&
+             data.type is string && data.type.size() > 0 && data.type.size() < 100 &&
+             data.value is string && data.value.size() > 0 && data.value.size() < 100 &&
+             data.date is string;
+    }
+
+    // ===============================================================
+    // Rules
+    // ===============================================================
+
+    match /users/{userId} {
+      allow read: if isOwner(userId) || isAdmin();
+      
+      allow create: if isAuthenticated() && 
+                      isValidUser(request.resource.data) && 
+                      isOwner(userId) && 
+                      request.resource.data.role == 'user';
+      
+      allow update: if isAuthenticated() && 
+                      isValidUser(request.resource.data) && 
+                      (isOwner(userId) || isAdmin()) &&
+                      request.resource.data.uid == resource.data.uid &&
+                      request.resource.data.email == resource.data.email &&
+                      request.resource.data.createdAt == resource.data.createdAt &&
+                      (isOwner(userId) ? request.resource.data.role == resource.data.role : true);
+      
+      allow delete: if isAdmin();
+
+      match /records/{recordId} {
+        allow read: if isOwner(userId) || isAdmin();
+        
+        allow create: if isOwner(userId) && 
+                        isValidRecord(request.resource.data) && 
+                        request.resource.data.uid == userId;
+        
+        allow update: if isOwner(userId) && 
+                        isValidRecord(request.resource.data) && 
+                        request.resource.data.uid == resource.data.uid &&
+                        request.resource.data.id == resource.data.id;
+        
+        allow delete: if isOwner(userId) || isAdmin();
+      }
+    }
+
+    // Default deny
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
