@@ -4,18 +4,29 @@ import {
   Bot, Sparkles, Brain, MessageSquare, 
   Stethoscope, Activity, FileText, Search, UserPlus,
   Compass, ShieldCheck, Cpu, ChevronRight, Zap, RefreshCw,
-  Globe, Database, Server, MessageSquarePlus, X, Send
+  Globe, Database, Server, MessageSquarePlus, X, Send,
+  Crown, Loader2, Phone, Scan
 } from 'lucide-react';
 import { ChatInterface } from './ChatInterface';
-import { api } from '../api';
+import { api, User } from '../api';
+import { UpgradeModal } from './UpgradeModal';
+import { NeuralVisualizer } from './NeuralVisualizer';
+import { NeuralVoiceCall } from './NeuralVoiceCall';
+
+import { NeuralHealthSummary } from './NeuralHealthSummary';
 
 interface DoctorianAIProps {
-  user?: any;
+  user: User | null;
+  onUpdate?: (user: User) => void;
   onNavigate?: (view: any) => void;
 }
 
-export function DoctorianAI({ user, onNavigate }: DoctorianAIProps) {
+export function DoctorianAI({ user, onUpdate, onNavigate }: DoctorianAIProps) {
   const [activeTab, setActiveTab] = useState<'chat' | 'lab'>('chat');
+  const [showUpgradeModal, setShowUpgradeModal] = useState(false);
+  const [showVisualizer, setShowVisualizer] = useState(false);
+  const [showVoiceCall, setShowVoiceCall] = useState(false);
+  const [showNeuralSummary, setShowNeuralSummary] = useState(false);
   const [showFeedbackModal, setShowFeedbackModal] = useState(false);
   const [feedbackType, setFeedbackType] = useState<'suggestion' | 'bug' | 'praise'>('suggestion');
   const [feedbackText, setFeedbackText] = useState('');
@@ -50,73 +61,134 @@ export function DoctorianAI({ user, onNavigate }: DoctorianAIProps) {
     }
   };
 
+  const [operationalIdea, setOperationalIdea] = useState<string | null>(null);
+  const [isGeneratingIdea, setIsGeneratingIdea] = useState(false);
+
+  const fetchOperationalIdea = async () => {
+    if (user?.subscriptionTier !== 'gold' || user?.subscriptionStatus !== 'active') return;
+    setIsGeneratingIdea(true);
+    try {
+      const idea = await api.auth.generateOperationalIdea();
+      setOperationalIdea(idea);
+    } catch (err) {
+      console.error("Operational idea failed:", err);
+    } finally {
+      setIsGeneratingIdea(false);
+    }
+  };
+
   useEffect(() => {
     const interval = setInterval(() => {
+      const isSilver = user?.subscriptionTier === 'silver' && user?.subscriptionStatus === 'active';
+      const isGold = user?.subscriptionTier === 'gold' && user?.subscriptionStatus === 'active';
+      const baseLatency = isGold ? 4 : isSilver ? 8 : 12;
+
       setStats(prev => ({
-        latency: Math.max(8, Math.min(25, prev.latency + (Math.random() > 0.5 ? 1 : -1))),
+        latency: Math.max(baseLatency - 2, Math.min(baseLatency + 5, prev.latency + (Math.random() > 0.5 ? 1 : -1))),
         threads: Math.max(4500, Math.min(5200, prev.threads + Math.floor(Math.random() * 20 - 10))),
         users: prev.users + Math.floor(Math.random() * 5),
         confidence: Math.max(97.0, Math.min(99.9, prev.confidence + (Math.random() > 0.5 ? 0.1 : -0.1)))
       }));
     }, 3000);
     return () => clearInterval(interval);
-  }, []);
+  }, [user?.subscriptionTier]);
 
   const quickTools = [
     { label: 'Diagnostic Lab', description: 'Deep symptom mapping and pathology analysis', icon: <Stethoscope size={24} />, view: 'symptoms', color: 'text-blue-500', bg: 'bg-blue-50 dark:bg-blue-900/20' },
+    { label: 'Neural Visualizer', description: 'Visual anatomical mapping & physical analysis', icon: <Scan size={24} />, view: 'visualizer', color: 'text-cyan-500', bg: 'bg-cyan-50 dark:bg-cyan-900/20' },
+    { label: 'Neural Health Report', description: 'Comprehensive AI synthesis of all bio-data', icon: <ClipboardList size={24} />, view: 'summary', color: 'text-amber-500', bg: 'bg-amber-50 dark:bg-amber-900/20' },
+    { label: 'AI Voice Link', description: 'Real-time clinical neural voice session', icon: <Phone size={24} />, view: 'voicecall', color: 'text-indigo-500', bg: 'bg-indigo-50 dark:bg-indigo-900/20' },
     { label: 'Bio-Monitor', description: 'Real-time physiological stream integration', icon: <Activity size={24} />, view: 'monitor', color: 'text-rose-500', bg: 'bg-rose-50 dark:bg-rose-900/20' },
     { label: 'Clinical Vault', description: 'Secure blockchain-backed health records', icon: <FileText size={24} />, view: 'records', color: 'text-emerald-500', bg: 'bg-emerald-50 dark:bg-emerald-900/20' },
     { label: 'Specialists', description: 'Direct link to authorized clinical networks', icon: <UserPlus size={24} />, view: 'specialist', color: 'text-purple-500', bg: 'bg-purple-50 dark:bg-purple-900/20' },
-    { label: 'CognisHub', description: 'Neural performance and cognitive metrics', icon: <Brain size={24} />, view: 'neuro', color: 'text-orange-500', bg: 'bg-orange-50 dark:bg-orange-900/20' },
-    { label: 'Deep Search', description: 'Global clinical database synchronization', icon: <Search size={24} />, view: 'home', color: 'text-slate-500', bg: 'bg-slate-50 dark:bg-slate-800' },
   ];
 
   return (
     <div className="flex flex-col min-h-[calc(100vh-8rem)] bg-white dark:bg-slate-900 rounded-[3rem] border border-slate-100 dark:border-slate-800 shadow-2xl overflow-hidden mb-12 transition-all">
+      <AnimatePresence>
+        {user?.subscriptionTier === 'gold' && user?.subscriptionStatus === 'active' && (
+          <motion.div 
+            initial={{ opacity: 0, y: -20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="bg-purple-600 p-3 sm:px-8 flex items-center justify-between gap-4 border-b border-purple-500/30 shrink-0"
+          >
+            <div className="flex items-center gap-3">
+              <Crown className="text-amber-300" size={18} />
+              <span className="text-[10px] font-black text-white uppercase tracking-widest hidden sm:inline">Operational Health Matrix Active</span>
+              <span className="text-[10px] font-black text-white uppercase tracking-widest sm:hidden">Neural Link: Elite</span>
+            </div>
+            <div className="flex items-center gap-4">
+               <div className="hidden md:flex items-center gap-2 px-3 py-1 bg-white/10 rounded-lg max-w-[200px] sm:max-w-[400px] overflow-hidden">
+                 <div className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse shrink-0" />
+                 <span className="text-[9px] font-black text-white uppercase truncate">
+                   {isGeneratingIdea ? 'Doctorian Ai Thinking...' : operationalIdea || 'Operational Strategy Live'}
+                 </span>
+               </div>
+               <button 
+                 onClick={fetchOperationalIdea}
+                 disabled={isGeneratingIdea}
+                 className="text-[10px] font-black text-white underline underline-offset-4 decoration-white/30 hover:decoration-white transition-all uppercase disabled:opacity-50"
+               >
+                 {isGeneratingIdea ? 'Thinking...' : 'Generate Elite Idea'}
+               </button>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+      <AnimatePresence>
+        {user?.subscriptionStatus === 'pending' && (
+          <motion.div 
+            initial={{ opacity: 0, y: -20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="bg-blue-600 p-3 sm:px-8 flex items-center justify-center gap-4 border-b border-blue-500/30 shrink-0"
+          >
+            <div className="flex items-center gap-2">
+              <Loader2 className="animate-spin text-white" size={16} />
+              <span className="text-[10px] font-black text-white uppercase tracking-widest">Neural Calibration Pending - Payment Evidence Delivered to Akora Joseph</span>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
       {/* Dynamic Header */}
-      <div className="px-6 py-8 bg-slate-900 border-b border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-6 shrink-0 relative overflow-hidden">
+      <div className="px-6 py-6 bg-slate-900 border-b border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-6 shrink-0 relative overflow-hidden">
         <div className="absolute top-0 right-0 p-12 opacity-5 pointer-events-none">
           <Brain size={200} className="text-blue-500" />
         </div>
         
-        <div className="relative z-10 flex items-center gap-6">
-          <button 
-            onClick={() => onNavigate?.('home')}
-            className="w-16 h-16 bg-blue-600 rounded-[2rem] flex items-center justify-center shadow-2xl shadow-blue-500/20 ring-4 ring-white/10 hover:scale-110 active:scale-95 transition-all"
-          >
-            <Bot className="text-white" size={32} />
-          </button>
-          <div>
-            <div className="flex items-center gap-2 mb-1">
-              <h1 className="text-2xl font-black text-white uppercase tracking-tighter">Doctorian <span className="text-blue-500">AI</span></h1>
-              <span className="px-2 py-0.5 bg-blue-500 text-[8px] font-black text-white rounded-md uppercase tracking-widest leading-none">Nexus v4.2</span>
-            </div>
-            <div className="flex items-center gap-3">
-              <div className="flex items-center gap-1.5">
-                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-                <span className="text-[10px] font-black text-emerald-500 uppercase tracking-widest">Neural Stream Active</span>
-              </div>
-              <div className="w-px h-3 bg-slate-700" />
-              <div className="flex items-center gap-1.5">
-                <ShieldCheck size={12} className="text-blue-400" />
-                <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Quantum Encryption Stable</span>
-              </div>
-            </div>
+        <div className="relative z-10 flex items-center gap-3 sm:gap-6">
+          <div className="flex items-center gap-3">
+             <div 
+               className="w-12 h-12 sm:w-16 sm:h-16 bg-blue-600 rounded-xl sm:rounded-[2rem] flex items-center justify-center shadow-2xl shadow-blue-500/20 ring-2 sm:ring-4 ring-white/10"
+             >
+               <Bot className="text-white" size={24} />
+             </div>
+             <div>
+               <div className="flex items-center gap-2 mb-0.5 sm:mb-1">
+                 <h1 className="text-lg sm:text-2xl font-black text-white uppercase tracking-tighter">Doctorian <span style={{ textDecorationLine: 'none', fontWeight: 'bold', textAlign: 'left', color: '#d01dc3', fontStyle: 'normal', fontFamily: 'Arial' }}>AI</span></h1>
+                 <span className="px-1.5 py-0.5 bg-blue-500 text-[6px] sm:text-[8px] font-black text-white rounded-md uppercase tracking-widest leading-none">Nexus v4.2</span>
+               </div>
+               <div className="flex items-center gap-2 sm:gap-3">
+                 <div className="flex items-center gap-1">
+                   <span className="w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full bg-emerald-500 animate-pulse" />
+                   <span className="text-[8px] sm:text-[10px] font-black text-emerald-500 uppercase tracking-widest">Active</span>
+                 </div>
+               </div>
+             </div>
           </div>
         </div>
 
-        <div className="relative z-10 flex p-1.5 bg-slate-800/80 backdrop-blur-md rounded-2xl border border-white/5 w-full sm:w-auto">
+          <div className="relative z-10 flex p-2 bg-slate-800/90 backdrop-blur-md rounded-2xl border border-white/10 w-full sm:w-auto">
           <button 
             onClick={() => setActiveTab('chat')}
-            className={`flex-1 sm:flex-none px-6 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2 ${activeTab === 'chat' ? 'bg-blue-600 text-white shadow-xl shadow-blue-500/40' : 'text-slate-400 hover:text-white'}`}
+            className={`flex-1 sm:flex-none px-5 sm:px-8 py-3 sm:py-3 rounded-xl text-[11px] sm:text-[10px] font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2 ${activeTab === 'chat' ? 'bg-blue-600 text-white shadow-xl shadow-blue-500/40' : 'text-slate-400 hover:text-white'}`}
           >
-            <MessageSquare size={14} /> AI Support
+            <MessageSquare size={16} className="shrink-0" /> Support
           </button>
           <button 
             onClick={() => setActiveTab('lab')}
-            className={`flex-1 sm:flex-none px-6 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2 ${activeTab === 'lab' ? 'bg-blue-600 text-white shadow-xl shadow-blue-500/40' : 'text-slate-400 hover:text-white'}`}
+            className={`flex-1 sm:flex-none px-5 sm:px-8 py-3 sm:py-3 rounded-xl text-[11px] sm:text-[10px] font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2 ${activeTab === 'lab' ? 'bg-blue-600 text-white shadow-xl shadow-blue-500/40' : 'text-slate-400 hover:text-white'}`}
           >
-            <Compass size={14} /> Precision Lab
+            <Compass size={16} className="shrink-0" /> Lab Suite
           </button>
         </div>
 
@@ -144,7 +216,7 @@ export function DoctorianAI({ user, onNavigate }: DoctorianAIProps) {
               </div>
               
               {/* Context Panel - Visible on Large Screens, and scrollable content on small */}
-              <div className="flex w-full xl:w-80 shrink-0 border-t xl:border-t-0 xl:border-l border-slate-100 dark:border-slate-800 flex-col bg-white dark:bg-slate-900 p-6 sm:p-8 xl:overflow-y-auto custom-scrollbar">
+              <div className="flex w-full xl:w-72 shrink-0 border-t xl:border-t-0 xl:border-l border-slate-100 dark:border-slate-800 flex-col bg-white dark:bg-slate-900 p-6 sm:p-8 xl:overflow-y-auto custom-scrollbar">
                 <div className="flex items-center justify-between mb-8">
                   <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.3em]">Session Metadata</h4>
                   <RefreshCw size={12} className="text-slate-400 animate-spin-slow" />
@@ -182,10 +254,24 @@ export function DoctorianAI({ user, onNavigate }: DoctorianAIProps) {
 
                   <div className="pt-6 border-t border-slate-100 dark:border-slate-800">
                     <div className="p-5 bg-gradient-to-br from-indigo-500/10 to-blue-500/10 rounded-3xl border border-blue-500/20">
-                       <Zap size={20} className="text-blue-500 mb-3" />
-                       <h5 className="text-[10px] font-black text-slate-900 dark:text-white uppercase mb-2">Upgrade to Pro</h5>
-                       <p className="text-[10px] text-slate-500 font-bold leading-relaxed mb-4">Access deep neural simulation and priority diagnostic queues.</p>
-                       <button className="w-full py-3 bg-slate-900 dark:bg-blue-600 text-white rounded-xl text-[9px] font-black uppercase tracking-widest hover:scale-105 active:scale-95 transition-all shadow-lg hover:shadow-blue-500/25">Enable Pro Flow</button>
+                       {user?.subscriptionTier === 'gold' ? <Crown size={20} className="text-amber-500 mb-3" /> : <Zap size={20} className="text-blue-500 mb-3" />}
+                       <h5 className="text-[10px] font-black text-slate-900 dark:text-white uppercase mb-2">
+                         {user?.subscriptionTier === 'free' ? 'Upgrade to Pro' : 'Premium Neural Link'}
+                       </h5>
+                       <p className="text-[10px] text-slate-500 font-bold leading-relaxed mb-4">
+                         {user?.subscriptionTier === 'free' ? 'Access deep neural simulation and priority diagnostic queues.' : 'Your neural interface is optimized for maximum performance.'}
+                       </p>
+                       <button 
+                         onClick={() => setShowUpgradeModal(true)}
+                         disabled={user?.subscriptionStatus === 'pending'}
+                         className={`w-full py-3 rounded-xl text-[9px] font-black uppercase tracking-widest hover:scale-105 active:scale-95 transition-all shadow-lg ${
+                            user?.subscriptionStatus === 'pending'
+                            ? 'bg-slate-200 dark:bg-slate-800 text-slate-400 cursor-not-allowed'
+                            : 'bg-slate-900 dark:bg-blue-600 text-white hover:shadow-blue-500/25'
+                         }`}
+                       >
+                         {user?.subscriptionStatus === 'pending' ? 'Verification Pending' : user?.subscriptionTier === 'free' ? 'Enable Pro Flow' : 'Manage Subscription'}
+                       </button>
                     </div>
                   </div>
 
@@ -213,36 +299,39 @@ export function DoctorianAI({ user, onNavigate }: DoctorianAIProps) {
               initial={{ opacity: 0, x: 20 }}
               animate={{ opacity: 1, x: 0 }}
               exit={{ opacity: 0, x: 20 }}
-              className="h-full overflow-y-auto p-6 sm:p-12 md:p-20 custom-scrollbar"
+              className="h-full overflow-y-auto p-5 sm:p-12 md:p-20 custom-scrollbar"
             >
               <div className="max-w-6xl mx-auto">
-                <div className="mb-12">
-                   <h2 className="text-[10px] font-black text-blue-600 uppercase tracking-[0.4em] mb-4">Neural Infrastructure</h2>
-                   <h3 className="text-3xl sm:text-4xl font-black text-slate-900 dark:text-white tracking-tighter uppercase leading-none">Diagnostic Intelligence <span className="text-slate-400 font-medium">Suite</span></h3>
-                   <p className="text-slate-500 dark:text-slate-400 mt-4 text-lg font-medium max-w-2xl">Access individual modules for specialized medical analysis, biological monitoring, and predictive clinical modeling.</p>
+                <div className="mb-10 sm:mb-12">
+                   <h2 className="text-[11px] sm:text-[10px] font-black text-blue-600 uppercase tracking-[0.4em] mb-4 text-high-visibility">Neural Infrastructure</h2>
+                   <h3 className="text-2xl sm:text-4xl font-black text-slate-900 dark:text-white tracking-tighter uppercase leading-tight sm:leading-none">Diagnostic Intelligence <span className="text-slate-400 font-medium">Suite</span></h3>
+                   <p className="text-slate-500 dark:text-slate-400 mt-4 text-base sm:text-lg font-bold max-w-2xl leading-relaxed">Access specialized clinical modules for deep anatomical mapping and predictive health modeling.</p>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 sm:gap-6">
                   {quickTools.map((tool, i) => (
                     <button
                       key={i}
                       onClick={() => {
-                        if (onNavigate) onNavigate(tool.view);
+                        if (tool.view === 'visualizer') setShowVisualizer(true);
+                        else if (tool.view === 'voicecall') setShowVoiceCall(true);
+                        else if (tool.view === 'summary') setShowNeuralSummary(true);
+                        else if (onNavigate) onNavigate(tool.view);
                       }}
-                      className="p-8 bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-[2.5rem] hover:border-blue-500/50 hover:shadow-2xl hover:shadow-blue-500/10 transition-all text-left group relative overflow-hidden"
+                      className="p-6 sm:p-8 bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-[2rem] sm:rounded-[2.5rem] hover:border-blue-500/50 hover:shadow-2xl hover:shadow-blue-500/10 transition-all text-left group relative overflow-hidden"
                     >
                       <div className={`absolute -right-4 -top-4 w-24 h-24 ${tool.bg} rounded-full blur-3xl opacity-0 group-hover:opacity-100 transition-opacity`} />
                       
-                      <div className={`w-14 h-14 ${tool.bg} ${tool.color} rounded-2xl flex items-center justify-center mb-8 group-hover:scale-110 group-hover:rotate-3 transition-transform relative z-10`}>
-                        {tool.icon}
+                      <div className={`w-12 h-12 sm:w-14 sm:h-14 ${tool.bg} ${tool.color} rounded-xl sm:rounded-2xl flex items-center justify-center mb-6 sm:mb-8 group-hover:scale-110 group-hover:rotate-3 transition-transform relative z-10`}>
+                        {React.cloneElement(tool.icon as any, { size: 24 })}
                       </div>
                       
                       <div className="relative z-10">
-                        <h5 className="text-lg font-black text-slate-900 dark:text-white uppercase tracking-tight mb-2 flex items-center justify-between">
+                        <h5 className="text-base sm:text-lg font-black text-slate-900 dark:text-white uppercase tracking-tight mb-2 flex items-center justify-between text-high-visibility">
                           {tool.label}
-                          <ChevronRight size={18} className="opacity-0 group-hover:opacity-100 transform translate-x-[-10px] group-hover:translate-x-0 transition-all" />
+                          <ChevronRight size={20} className="sm:size-18 opacity-0 group-hover:opacity-100 transform translate-x-[-10px] group-hover:translate-x-0 transition-all" />
                         </h5>
-                        <p className="text-[11px] font-bold text-slate-500 dark:text-slate-400 leading-relaxed uppercase tracking-wide">{tool.description}</p>
+                        <p className="text-[12px] sm:text-[11px] font-bold text-slate-500 dark:text-slate-400 leading-relaxed uppercase tracking-wide">{tool.description}</p>
                       </div>
                     </button>
                   ))}
@@ -303,6 +392,57 @@ export function DoctorianAI({ user, onNavigate }: DoctorianAIProps) {
           )}
         </AnimatePresence>
       </div>
+
+      <AnimatePresence>
+        {showUpgradeModal && (
+          <UpgradeModal 
+            user={user} 
+            onClose={() => setShowUpgradeModal(false)} 
+            onUpdate={(u) => {
+              onUpdate?.(u);
+              setShowUpgradeModal(false);
+            }} 
+          />
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {showVisualizer && (
+          <NeuralVisualizer onClose={() => setShowVisualizer(false)} />
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {showVoiceCall && (
+          <NeuralVoiceCall user={user} onClose={() => setShowVoiceCall(false)} />
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {showNeuralSummary && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setShowNeuralSummary(false)}
+              className="absolute inset-0 bg-slate-950/80 backdrop-blur-md"
+            />
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              className="relative w-full max-w-4xl max-h-[90vh] overflow-hidden"
+            >
+              <NeuralHealthSummary 
+                vitals={null} 
+                history={[]} 
+                onClose={() => setShowNeuralSummary(false)} 
+              />
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
 
       {/* Feedback Modal */}
       <AnimatePresence>
@@ -407,3 +547,24 @@ export function DoctorianAI({ user, onNavigate }: DoctorianAIProps) {
     </div>
   );
 }
+
+const ClipboardList: React.FC<{ size?: number; className?: string }> = ({ size = 20, className = "" }) => (
+  <svg 
+    width={size} 
+    height={size} 
+    viewBox="0 0 24 24" 
+    fill="none" 
+    stroke="currentColor" 
+    strokeWidth="2" 
+    strokeLinecap="round" 
+    strokeLinejoin="round" 
+    className={className}
+  >
+    <rect width="8" height="4" x="8" y="2" rx="1" ry="1" />
+    <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2" />
+    <path d="M12 11h4" />
+    <path d="M12 16h4" />
+    <path d="M8 11h.01" />
+    <path d="M8 16h.01" />
+  </svg>
+);

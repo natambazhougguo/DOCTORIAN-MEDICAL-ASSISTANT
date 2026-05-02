@@ -21,6 +21,10 @@ import { CognisHub } from "./components/CognisHub";
 import { VitalityMatrix } from "./components/VitalityMatrix";
 import { Tasks } from "./components/Tasks";
 import { SymptomChecker } from "./components/SymptomChecker";
+import { DiagnosticLab } from "./components/DiagnosticLab";
+import { EmergencyRegistry } from "./components/EmergencyRegistry";
+import { Billing } from "./components/Billing";
+import { Footer } from "./components/Footer";
 import { MedicationTracker } from "./components/MedicationTracker";
 import { BioSecurity } from "./components/BioSecurity";
 import { 
@@ -89,7 +93,7 @@ const SEARCHABLE_ITEMS = [
   { label: 'AI Cognis Lab', view: 'ai_lab', icon: <Bot size={18} />, category: 'AI Features', description: 'Advanced diagnostics and anatomical synthesis interface.' },
   { label: 'Clinical Roadmap', view: 'home', icon: <LayoutGrid size={18} />, category: 'Intelligence', description: 'Track your specialized health milestones and journey.' },
   { label: 'Bio-Simulation', view: 'home', icon: <Zap size={18} />, category: 'Intelligence', description: 'Real-time biological modeling and DNA synthesis.' },
-  { label: 'Diagnostic Mapper', view: 'symptoms', icon: <Stethoscope size={18} />, category: 'AI Features', description: 'Analyze your symptoms with advanced AI intelligence.' },
+  { label: 'Diagnostic Mapper', view: 'diagnostic_lab', icon: <Stethoscope size={18} />, category: 'AI Features', description: 'Analyze your symptoms with advanced AI intelligence.' },
   { label: 'Bio-Pharmacy Tracker', view: 'meds', icon: <Pill size={18} />, category: 'Management', description: 'Dosage tracking and interaction checks.' },
   { label: 'CognisHub', view: 'neuro', icon: <Brain size={18} />, category: 'Intelligence', description: 'Cognitive health and brain performance tracking.' },
   { label: 'Vitality Matrix', view: 'vitality', icon: <Activity size={18} />, category: 'Long-term Health', description: 'Longevity, metabolic age, and performance analytics.' },
@@ -97,7 +101,8 @@ const SEARCHABLE_ITEMS = [
   { label: 'Admin Dashboard', view: 'admin', icon: <Shield size={18} />, category: 'System', description: 'System administration and user management.' },
   { label: 'Clinical Passport', view: 'records', icon: <ShieldCheck size={18} />, category: 'Data', description: 'Verified health status and travel authorization.' },
   { label: 'Specialist Finder', view: 'specialist', icon: <UserPlus size={18} />, category: 'Network', description: 'Connect with authorized medical practitioners.' },
-  { label: 'Bio-Security Control', view: 'biosecurity', icon: <Fingerprint size={18} />, category: 'Security', description: 'Neural identity management and biometric vault.' },
+  { label: 'Billing & Subscriptions', view: 'billing', icon: <Crown size={18} />, category: 'Account', description: 'Manage your subscription plans and payment methods.' },
+  { label: 'Bio-Security Control', view: 'home', icon: <Fingerprint size={18} />, category: 'Security', description: 'Neural identity management and biometric vault.' },
   { label: 'About Doctorian AI', view: 'about', icon: <Info size={18} />, category: 'Info', description: 'Learn about our mission and technology.' },
   { label: 'Privacy Policy', view: 'privacy', icon: <Shield size={18} />, category: 'Legal', description: 'How we protect and manage your data.' },
   { label: 'Terms of Service', view: 'terms', icon: <FileText size={18} />, category: 'Legal', description: 'Our legal agreement and usage terms.' },
@@ -158,7 +163,7 @@ const HEALTH_TIPS: HealthTip[] = [
 ];
 
 export default function App() {
-  const [currentView, setCurrentView] = useState<'home' | 'monitor' | 'features' | 'about' | 'records' | 'profile' | 'admin' | 'specialist' | 'neuro' | 'vitality' | 'tasks' | 'ai_lab' | 'meds' | 'symptoms' | 'biosecurity' | 'ai_nexus' | ResourceType>('home');
+  const [currentView, setCurrentView] = useState<'home' | 'monitor' | 'features' | 'about' | 'records' | 'profile' | 'admin' | 'specialist' | 'neuro' | 'vitality' | 'tasks' | 'ai_lab' | 'meds' | 'symptoms' | 'biosecurity' | 'ai_nexus' | 'diagnostic_lab' | 'billing' | 'emergency' | ResourceType>('home');
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<any[]>([]);
@@ -353,7 +358,7 @@ export default function App() {
       const response = await api.ai.geminiChat(
         [{ role: "user", text: "Provide a concise, professional daily health tip or insight for a medical app user. Focus on wellness, nutrition, or preventive care. Keep it under 2 sentences." }], 
         "You are a helpful medical assistant.",
-        "gemini-3-flash-preview", 
+        "gemini-1.5-flash", 
         0.7
       );
       
@@ -485,13 +490,14 @@ export default function App() {
   const navLinks = [
     { id: 'home', label: 'Dashboard', icon: <Home size={16} /> },
     { id: 'ai_nexus', label: 'Doctorian AI', icon: <Bot size={16} /> },
-    { id: 'symptoms', label: 'Diagnostic Lab', icon: <Stethoscope size={16} /> },
+    { id: 'diagnostic_lab', label: 'Diagnostic Lab', icon: <Stethoscope size={16} /> },
+    { id: 'billing', label: 'Subscription', icon: <CreditCard size={16} /> },
+    { id: 'emergency', label: 'Emergency Nodes', icon: <PhoneCall size={16} /> },
     { id: 'tasks', label: 'Clinical Protocols', icon: <ListTodo size={16} /> },
     { id: 'meds', label: 'Bio-Pharmacy', icon: <Pill size={16} /> },
     { id: 'monitor', label: 'Bio-Monitor', icon: <Monitor size={16} /> },
     { id: 'neuro', label: 'CognisHub', icon: <Brain size={16} /> },
     { id: 'vitality', label: 'Vitality Matrix', icon: <Zap size={16} /> },
-    { id: 'biosecurity', label: 'Bio-Security', icon: <Fingerprint size={16} /> },
     { id: 'about', label: 'Systems Info', icon: <Info size={16} /> },
     { id: 'specialist', label: 'Cognis Specialists', icon: <Stethoscope size={16} /> },
   ];
@@ -529,56 +535,43 @@ export default function App() {
       >
         Skip to main content
       </a>
-      {/* Sidebar - Floating and Persistent */}
+      {/* Sidebar - Floating and Persistent on all devices */}
       <aside 
-        className="hidden md:flex flex-col w-[80px] lg:w-72 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 my-4 ml-4 rounded-[2.5rem] sticky top-4 h-[calc(100vh-2rem)] z-50 shrink-0 transition-all duration-300 shadow-2xl shadow-slate-200/50 dark:shadow-slate-950/50"
+        className="flex flex-col w-20 sm:w-24 lg:w-56 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 my-2 sm:my-4 ml-2 sm:ml-4 rounded-3xl sm:rounded-[2.5rem] sticky top-2 sm:top-4 h-[calc(100vh-1rem)] sm:h-[calc(100vh-2rem)] z-50 shrink-0 transition-all duration-300 shadow-2xl shadow-slate-200/50 dark:shadow-slate-950/50"
         aria-label="Sidebar navigation"
       >
-        <button 
-          className="p-6 lg:p-8 cursor-pointer w-full text-center lg:text-left flex items-center justify-center lg:justify-start"
-          onClick={() => setCurrentView('home')}
-          aria-label="Go to Doctorian AI Dashboard"
-        >
-          <div className="lg:hidden">
-            <Logo size="sm" showText={false} />
-          </div>
-          <div className="hidden lg:block">
-            <Logo />
-          </div>
-        </button>
-
-        <nav className="flex-1 px-2 lg:px-4 space-y-2 overflow-y-auto custom-scrollbar pb-6 scrollbar-hide" aria-label="Main navigation">
-          <p className="px-2 lg:px-4 text-[8px] lg:text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-[0.2em] mb-4 text-center lg:text-left">Menu</p>
+        <nav className="flex-1 px-1 sm:px-2 lg:px-4 py-8 space-y-1 sm:space-y-3 overflow-y-auto custom-scrollbar pb-6 scrollbar-hide" aria-label="Main navigation">
+          <p className="hidden lg:block px-4 text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-[0.2em] mb-4 text-high-visibility">Main Matrix</p>
           {allNavLinks.map((link) => (
             <button 
               key={link.id}
               onClick={() => setCurrentView(link.id as any)}
               title={link.label}
-              className={`w-full flex flex-col lg:flex-row items-center gap-1 lg:gap-3 px-2 lg:px-4 py-3 rounded-2xl text-[10px] lg:text-sm font-bold transition-all ${
+              className={`w-full flex flex-col lg:flex-row items-center gap-1.5 lg:gap-3 px-2 sm:px-3 lg:px-4 py-4 lg:py-3 rounded-2xl sm:rounded-3xl text-[9px] sm:text-[11px] lg:text-sm font-bold transition-all hover:scale-105 active:scale-95 ${
                 currentView === link.id 
-                  ? (link.id === 'admin' ? 'bg-purple-600 text-white shadow-lg shadow-purple-200/50' : 'bg-blue-600 text-white shadow-lg shadow-blue-200/50') 
+                  ? (link.id === 'admin' ? 'bg-purple-600 text-white shadow-xl shadow-purple-200/50' : 'bg-blue-600 text-white shadow-xl shadow-blue-200/50') 
                   : 'text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-white'
               }`}
             >
-              <div className="shrink-0">{link.icon}</div>
-              <span className="hidden lg:inline flex-1 text-left truncate">{link.label}</span>
-              <span className="lg:hidden text-[8px] font-black uppercase tracking-tighter truncate max-w-full">{link.label.split(' ')[0]}</span>
+              <div className="shrink-0">{React.cloneElement(link.icon as any, { size: 20 })}</div>
+              <span className="hidden lg:inline flex-1 text-left truncate text-high-visibility">{link.label}</span>
+              <span className="lg:hidden text-[8px] font-black uppercase tracking-tighter truncate max-w-full text-center">{link.label.split(' ')[0]}</span>
             </button>
           ))}
           
           {/* Resource Menu with Dropdown */}
-          <div className="pt-6 mt-6 border-t border-slate-50 dark:border-slate-800 px-2">
+          <div className="pt-4 sm:pt-6 mt-4 sm:mt-6 border-t border-slate-50 dark:border-slate-800 px-1 sm:px-2">
             <button 
               onClick={() => setIsResourcesOpen(!isResourcesOpen)}
-              className="w-full flex items-center justify-center lg:justify-between px-2 text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-[0.2em] mb-2 hover:text-slate-900 dark:hover:text-white transition-colors"
+              className="w-full flex items-center justify-center lg:justify-between px-1 text-[8px] sm:text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-[0.2em] mb-2 hover:text-slate-900 dark:hover:text-white transition-colors"
             >
               <span className="hidden lg:inline">Resources</span>
               <motion.div
                 animate={{ rotate: isResourcesOpen ? 180 : 0 }}
                 transition={{ duration: 0.3 }}
-                className={!isResourcesOpen ? "lg:block" : ""}
+                className="block"
               >
-                <ChevronDown size={12} />
+                <ChevronDown size={10} className="sm:size-12" />
               </motion.div>
             </button>
             
@@ -591,17 +584,17 @@ export default function App() {
                   className="space-y-1 overflow-hidden"
                 >
                   {[
-                    { label: 'Help', id: 'help', icon: <Info size={14} /> },
-                    { label: 'Network', id: 'community', icon: <UserPlus size={14} /> },
-                    { label: 'Privacy', id: 'privacy', icon: <Shield size={14} /> },
-                    { label: 'Terms', id: 'terms', icon: <FileText size={14} /> },
-                    { label: 'Signal', id: 'feedback', icon: <MessageCircle size={14} /> }
+                    { label: 'Help Center', id: 'help', icon: <Info size={14} /> },
+                    { label: 'Global Network', id: 'community', icon: <UserPlus size={14} /> },
+                    { label: 'Privacy Vault', id: 'privacy', icon: <Shield size={14} /> },
+                    { label: 'Clinical Terms', id: 'terms', icon: <FileText size={14} /> },
+                    { label: 'Clinical Protocols', id: 'protocols', icon: <Activity size={14} /> }
                   ].map((res) => (
                     <button 
                       key={res.id}
                       onClick={() => setCurrentView(res.id as ResourceType)}
                       title={res.label}
-                      className={`w-full flex flex-col lg:flex-row items-center gap-1 lg:gap-3 px-2 lg:px-4 py-2.5 rounded-xl text-[8px] lg:text-xs font-bold transition-all ${
+                      className={`w-full flex flex-col lg:flex-row items-center gap-1 lg:gap-3 px-1 sm:px-2 lg:px-4 py-2.5 rounded-xl text-[7px] sm:text-[8px] lg:text-xs font-bold transition-all ${
                         currentView === res.id 
                           ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 shadow-sm' 
                           : 'text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-white'
@@ -619,23 +612,22 @@ export default function App() {
           </div>
         </nav>
 
-        <div className="p-2 lg:p-4 mt-auto border-t border-slate-50 dark:border-slate-800">
-          <div className="bg-slate-50 dark:bg-slate-800/50 rounded-2xl lg:rounded-3xl p-2 lg:p-4 border border-slate-100 dark:border-slate-800">
-            <p className="hidden lg:block text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-3">System</p>
-            <div className="flex items-center justify-center lg:justify-start gap-2 mb-2">
-              <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+        <div className="p-1 sm:p-2 lg:p-4 mt-auto border-t border-slate-50 dark:border-slate-800">
+          <div className="bg-slate-50 dark:bg-slate-800/50 rounded-xl sm:rounded-2xl lg:rounded-3xl p-1 sm:p-2 lg:p-4 border border-slate-100 dark:border-slate-800 flex flex-col items-center lg:items-start gap-2">
+            <div className="flex items-center gap-2">
+              <div className="w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full bg-emerald-500 animate-pulse" />
               <span className="hidden lg:inline text-[10px] font-bold text-slate-600 dark:text-slate-300">Active</span>
             </div>
-            <div className="flex items-center justify-center lg:justify-start gap-2">
-              <div className={`w-2 h-2 rounded-full ${isOffline ? 'bg-amber-500' : 'bg-emerald-500'}`} />
+            <div className="flex items-center gap-2">
+              <div className={`w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full ${isOffline ? 'bg-amber-500' : 'bg-emerald-500'}`} />
               <span className="hidden lg:inline text-[10px] font-bold text-slate-600 dark:text-slate-300">{isOffline ? 'Offline' : 'Connected'}</span>
             </div>
           </div>
         </div>
       </aside>
 
-      <div className="flex-1 flex flex-col h-full min-h-0 overflow-y-auto overflow-x-hidden custom-scrollbar relative bg-slate-50 dark:bg-slate-950 px-4 sm:px-6 lg:px-8">
-        <div className="max-w-7xl mx-auto w-full flex flex-col min-h-full">
+      <div className="flex-1 flex flex-col h-full min-h-0 overflow-y-auto overflow-x-hidden custom-scrollbar relative bg-slate-50 dark:bg-slate-950">
+        <div className="w-full flex flex-col min-h-full px-2 sm:px-6 lg:px-8">
           {/* Offline Banner */}
         <AnimatePresence>
           {isOffline && (
@@ -651,41 +643,43 @@ export default function App() {
         </AnimatePresence>
 
         {/* Mobile Sidebar Trigger (Optional but keep layout stable) */}
-        <header className="sticky top-0 z-40 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md border-b border-slate-200 dark:border-slate-800 px-4 sm:px-6 py-3 flex items-center justify-between transition-colors">
-          <button 
-            className="lg:hidden flex items-center justify-center p-2 text-slate-500 hover:text-blue-600 transition-colors"
-            onClick={() => setCurrentView('home')}
-            aria-label="Go to Home"
-          >
-            <Home size={20} />
-          </button>
+        <header className="sticky top-0 z-40 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md border-b border-slate-200 dark:border-slate-800 px-4 sm:px-6 py-4 flex items-center justify-between transition-colors">
+          <div className="flex items-center gap-6">
+            <button 
+              className="flex items-center justify-center cursor-pointer hover:scale-105 active:scale-95 transition-transform"
+              onClick={() => setCurrentView('home')}
+              aria-label="Go to Home"
+            >
+              <Logo size="sm" className="scale-75 sm:scale-90 lg:scale-100" />
+            </button>
+          </div>
 
-          <div className="hidden md:flex flex-1 justify-center px-4 items-center gap-4">
+          <div className="flex md:flex flex-1 justify-center px-4 items-center gap-4">
             <button 
               onClick={() => setIsSearchOpen(true)}
-              className="w-full max-w-md flex items-center gap-3 bg-slate-100 dark:bg-slate-800 px-4 py-2 rounded-xl text-slate-400 cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-700 transition-all border border-transparent hover:border-blue-200 dark:hover:border-blue-800"
+              className="hidden sm:flex w-full max-w-md items-center gap-3 bg-slate-100 dark:bg-slate-800 px-4 py-2 rounded-xl text-slate-400 cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-700 transition-all border border-transparent hover:border-blue-200 dark:hover:border-blue-800"
               aria-label="Open search"
             >
               <Search aria-hidden="true" size={16} />
-              <span className="text-xs font-bold">Search symptoms, records...</span>
+              <span className="text-xs font-bold">Search...</span>
             </button>
-            <div className="flex items-center gap-2 px-3 py-1 bg-emerald-50 dark:bg-emerald-900/20 rounded-full border border-emerald-100 dark:border-emerald-800">
+            <div className="hidden lg:flex items-center gap-2 px-3 py-1 bg-emerald-50 dark:bg-emerald-900/20 rounded-full border border-emerald-100 dark:border-emerald-800">
               <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-              <span className="text-[9px] font-black text-emerald-600 dark:text-emerald-400 uppercase tracking-widest whitespace-nowrap">24k+ Active</span>
+              <span className="text-[9px] font-black text-emerald-600 dark:text-emerald-400 uppercase tracking-widest whitespace-nowrap text-high-visibility">Active System</span>
             </div>
             <button
               onClick={() => setIsEyeCareMode(!isEyeCareMode)}
-              className={`p-2 rounded-xl transition-all flex items-center gap-2 border ${
+              className={`p-3 rounded-2xl transition-all flex items-center gap-2 border shadow-sm ${
                 isEyeCareMode 
-                  ? 'bg-amber-100 border-amber-200 text-amber-700 dark:bg-amber-900/40 dark:border-amber-800 dark:text-amber-400' 
-                  : 'bg-slate-100 border-transparent text-slate-400 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700'
+                  ? 'bg-amber-100 border-amber-300 text-amber-700 dark:bg-amber-900/40 dark:border-amber-800 dark:text-amber-400 ring-2 ring-amber-500/20' 
+                  : 'bg-slate-100 border-transparent text-slate-500 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700'
               }`}
               aria-label={isEyeCareMode ? "Disable Eye Care Mode" : "Enable Eye Care Mode"}
               aria-pressed={isEyeCareMode}
               title={isEyeCareMode ? "Disable Eye Care Mode" : "Enable Eye Care Mode"}
             >
-              {isEyeCareMode ? <Eye aria-hidden="true" size={18} /> : <EyeOff aria-hidden="true" size={18} />}
-              <span className="text-[10px] font-black uppercase tracking-widest hidden lg:inline">Eye Care</span>
+              {isEyeCareMode ? <Eye aria-hidden="true" size={20} /> : <EyeOff aria-hidden="true" size={20} />}
+              <span className="text-[10px] font-black uppercase tracking-widest hidden lg:inline text-high-visibility">Legibility Mode</span>
             </button>
           </div>
           
@@ -908,7 +902,7 @@ export default function App() {
               onInstall={handleDirectInstall}
             />
           ) : currentView === 'ai_nexus' ? (
-            <DoctorianAI user={user} onNavigate={setCurrentView} />
+            <DoctorianAI user={user} onUpdate={(u) => setUser(u)} onNavigate={setCurrentView} />
           ) : currentView === 'specialist' ? (
             <motion.div
               role="main"
@@ -965,6 +959,15 @@ export default function App() {
           >
             <Tasks />
           </motion.div>
+        ) : currentView === 'diagnostic_lab' ? (
+          <motion.div
+            key="diagnostic_lab"
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 1.05 }}
+          >
+            <DiagnosticLab />
+          </motion.div>
         ) : currentView === 'symptoms' ? (
           <motion.div
             key="symptoms"
@@ -983,30 +986,23 @@ export default function App() {
           >
             <MedicationTracker />
           </motion.div>
-        ) : currentView === 'biosecurity' ? (
+        ) : currentView === 'billing' ? (
           <motion.div
-            key="biosecurity"
-            initial={{ opacity: 0, scale: 0.95 }}
-            animate={{ opacity: 1, scale: 1 }}
-            exit={{ opacity: 0, scale: 1.05 }}
-            className="max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-12"
+            key="billing"
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -20 }}
           >
-            <div className="mb-8 flex items-center justify-between">
-              <div>
-                <h1 className="text-3xl font-black text-slate-900 dark:text-white uppercase tracking-tighter">Bio-Security Nexus</h1>
-                <p className="text-slate-500 dark:text-slate-400 font-medium">Neural identity management and multi-factor biometric authentication.</p>
-              </div>
-              <button 
-                onClick={() => setCurrentView('profile')}
-                className="p-3 bg-slate-100 dark:bg-slate-800 rounded-2xl text-slate-600 dark:text-slate-400 hover:bg-slate-200 transition-colors flex items-center gap-2 text-xs font-black uppercase tracking-widest"
-              >
-                <ArrowLeft size={18} />
-                Back to Settings
-              </button>
-            </div>
-            <div className="bg-white dark:bg-slate-900 rounded-[3rem] shadow-3xl border border-slate-100 dark:border-slate-800 overflow-hidden min-h-[600px] h-[70vh]">
-              <BioSecurity />
-            </div>
+            <Billing />
+          </motion.div>
+        ) : currentView === 'emergency' ? (
+          <motion.div
+            key="emergency"
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -20 }}
+          >
+            <EmergencyRegistry />
           </motion.div>
         ) : currentView === 'profile' ? (
           <motion.div
@@ -1108,373 +1104,133 @@ export default function App() {
     </div>
   </main>
 
-  {/* Footer */}
-  <motion.footer 
-    initial={{ opacity: 0 }}
-    animate={{ opacity: 1 }}
-    transition={{ delay: 0.5 }}
-    className="mt-20 border-t border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 transition-colors relative overflow-hidden"
-  >
-        <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-blue-600 to-transparent opacity-20"></div>
-        <div className="max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8 py-20 relative z-10">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-12 mb-16">
-            <div className="space-y-6">
-              <div className="flex items-center gap-2">
-                <Stethoscope size={24} className="text-blue-600" />
-                <span className="text-xl font-black tracking-tighter uppercase text-slate-900 dark:text-white">DOCTORIAN<span className="text-blue-600">AI</span></span>
-              </div>
-              <p className="text-slate-500 dark:text-slate-400 text-sm leading-relaxed font-medium">
-                Pioneering the next generation of reactive longevity and Cognis diagnostics. Doctorian AI synthesizes biological data with advanced machine reasoning to empower your health journey.
-              </p>
-              <div className="flex items-center gap-4">
-                <div className="w-10 h-10 rounded-xl bg-blue-50 dark:bg-blue-900/20 flex items-center justify-center border border-blue-100 dark:border-blue-800 shadow-sm shadow-blue-500/10">
-                  <ShieldCheck size={18} className="text-blue-600" />
-                </div>
-                <div>
-                  <p className="text-[10px] font-black uppercase text-slate-400 tracking-wider">HIPAA Certified</p>
-                  <p className="text-xs font-black text-slate-900 dark:text-white uppercase tracking-tight">Zero-Trust Privacy Protocol</p>
-                </div>
-              </div>
-            </div>
-
-            <div>
-              <h4 className="text-xs font-black text-slate-900 dark:text-white uppercase tracking-widest mb-8 border-l-2 border-blue-600 pl-4">Clinical Suite</h4>
-              <ul className="space-y-4">
-                {[
-                  { label: 'AI Cognis Lab', view: 'ai_lab' },
-                  { label: 'Cognis Lab', view: 'neuro' },
-                  { label: 'Vital Matrix', view: 'vitality' },
-                ].map(link => (
-                  <li key={link.label}>
-                    <button onClick={() => setCurrentView(link.view as any)} className="text-slate-500 hover:text-blue-600 text-sm font-bold transition-all hover:translate-x-1">{link.label}</button>
-                  </li>
-                ))}
-              </ul>
-            </div>
-
-            <div>
-              <h4 className="text-xs font-black text-slate-900 dark:text-white uppercase tracking-widest mb-8 border-l-2 border-blue-600 pl-4">Resources</h4>
-              <ul className="space-y-4">
-                {[
-                  { label: 'Community Lab', view: 'community' },
-                  { label: 'Help Documentation', view: 'help' },
-                  { label: 'System Status', view: 'home' },
-                  { label: 'Specialist Network', view: 'specialist' },
-                  { label: 'Project About', view: 'about' },
-                ].map(link => (
-                  <li key={link.label}>
-                    <button onClick={() => setCurrentView(link.view as any)} className="text-slate-500 hover:text-blue-600 text-sm font-bold transition-all hover:translate-x-1">{link.label}</button>
-                  </li>
-                ))}
-              </ul>
-            </div>
-
-            <div>
-              <h4 className="text-xs font-black text-slate-900 dark:text-white uppercase tracking-widest mb-8 border-l-2 border-blue-600 pl-4">Global Sync</h4>
+  {/* Search Overlay */}
+  <AnimatePresence>
+    {isSearchOpen && (
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        className="fixed inset-0 z-[110] bg-slate-900/60 backdrop-blur-md p-4 sm:p-8 flex items-start justify-center"
+      >
+        <motion.div
+          initial={{ scale: 0.9, y: 20 }}
+          animate={{ scale: 1, y: 0 }}
+          exit={{ scale: 0.9, y: 20 }}
+          role="dialog"
+          aria-modal="true"
+          className="w-full max-w-2xl bg-white dark:bg-slate-900 rounded-[2rem] shadow-2xl overflow-hidden mt-12 border border-slate-100 dark:border-slate-800"
+        >
+          <div className="p-6 border-b border-slate-100 dark:border-slate-800 flex items-center gap-4">
+            <Search className="text-blue-600 dark:text-blue-400" size={24} />
+            <input 
+              autoFocus
+              type="text"
+              placeholder="Search features, records, or symptoms..."
+              className="flex-1 bg-transparent border-none outline-none text-lg font-bold text-slate-900 dark:text-white placeholder:text-slate-300 dark:placeholder:text-slate-600"
+              value={searchQuery}
+              onChange={(e) => handleSearch(e.target.value)}
+            />
+            <button 
+              onClick={() => setIsSearchOpen(false)}
+              className="p-2 text-slate-400 hover:text-slate-900 dark:hover:text-white transition-colors"
+            >
+              <X size={24} />
+            </button>
+          </div>
+          <div className="max-h-[60vh] overflow-y-auto p-6 sm:p-8 custom-scrollbar">
+            {searchQuery.trim() === '' ? (
               <div className="space-y-6">
-                <a 
-                  href="https://wa.me/256787674140" 
-                  target="_blank" 
-                  rel="noopener noreferrer"
-                  className="group flex items-center gap-4 p-5 bg-emerald-500 text-white rounded-[2rem] transition-all hover:scale-[1.05] hover:shadow-2xl hover:shadow-emerald-500/20 active:scale-95 border border-white/20 relative overflow-hidden"
-                >
-                  <div className="absolute inset-0 bg-gradient-to-tr from-emerald-600/0 via-emerald-600/0 to-emerald-400/30 opacity-0 group-hover:opacity-100 transition-opacity"></div>
-                  <div className="relative z-10 bg-white/20 p-2.5 rounded-xl group-hover:rotate-12 transition-transform shadow-lg">
-                    <MessageCircle size={20} />
-                  </div>
-                  <div className="relative z-10">
-                    <p className="text-[10px] font-black uppercase opacity-90 leading-none mb-1.5 tracking-[0.2em]">Live Support</p>
-                    <p className="text-sm font-black tracking-tighter uppercase">WhatsApp Instant</p>
-                  </div>
-                </a>
-                <div className="grid grid-cols-4 gap-3">
-                  {[
-                    { icon: <Facebook size={18} />, href: 'mailto:Josephhaxzy@gmail.com', color: 'bg-[#1877F2]' },
-                    { icon: <Instagram size={18} />, href: 'mailto:Josephhaxzy@gmail.com', color: 'bg-gradient-to-tr from-[#f9ce34] via-[#ee2a7b] to-[#6228d7]' },
-                    { icon: <X size={18} />, href: 'mailto:Josephhaxzy@gmail.com', color: 'bg-black' },
-                    { icon: <Mail size={18} />, href: 'mailto:Josephhaxzy@gmail.com', color: 'bg-blue-600' },
-                  ].map((social, i) => (
-                    <a key={i} href={social.href} target="_blank" rel="noopener noreferrer" className={`p-3 rounded-xl text-white flex items-center justify-center hover:scale-110 transition-all hover:-translate-y-1 shadow-lg ${social.color}`}>
-                      {social.icon}
-                    </a>
+                <p className="text-xs font-black text-slate-400 uppercase tracking-widest">Recommended Nodes</p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  {SEARCHABLE_ITEMS.slice(0, 4).map((item, i) => (
+                    <button
+                      key={i}
+                      onClick={() => {
+                        setCurrentView(item.view as any);
+                        setIsSearchOpen(false);
+                      }}
+                      className="flex items-center gap-4 p-4 bg-slate-50 dark:bg-slate-800/50 hover:bg-white dark:hover:bg-slate-800 rounded-2xl transition-all border border-transparent hover:border-slate-100 dark:hover:border-slate-700"
+                    >
+                      <div className="w-10 h-10 rounded-xl bg-white dark:bg-slate-800 flex items-center justify-center text-slate-400">
+                        {item.icon}
+                      </div>
+                      <span className="text-xs font-black uppercase tracking-widest text-slate-700 dark:text-slate-200">{item.label}</span>
+                    </button>
                   ))}
                 </div>
               </div>
-            </div>
-          </div>
-
-          <div className="pt-12 border-t border-slate-100 dark:border-slate-800 flex flex-col md:flex-row items-center justify-between gap-10">
-            <div className="text-center md:text-left">
-              <p className="text-sm font-black text-slate-900 dark:text-white uppercase tracking-tighter flex items-center justify-center md:justify-start gap-2">
-                Developed by <span className="text-blue-600 px-3 py-1 bg-blue-50 dark:bg-blue-900/30 rounded-lg border border-blue-100 dark:border-blue-800">Akora Joseph</span>
-              </p>
-              <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.3em] mt-3 flex items-center justify-center md:justify-start gap-3">
-                <span className="w-6 h-[1px] bg-slate-200 dark:bg-slate-700"></span>
-                Lead Medical Systems Architect
-              </p>
-            </div>
-            
-            <div className="flex flex-wrap justify-center gap-8 md:gap-12">
-              <button onClick={() => setCurrentView('privacy')} className="text-[10px] font-black text-slate-400 hover:text-blue-600 uppercase tracking-[0.25em] transition-all hover:scale-110">Privacy Hub</button>
-              <button onClick={() => setCurrentView('terms')} className="text-[10px] font-black text-slate-400 hover:text-blue-600 uppercase tracking-[0.25em] transition-all hover:scale-110">Legal Terms</button>
-              <button onClick={() => setCurrentView('feedback')} className="text-[10px] font-black text-slate-400 hover:text-blue-600 uppercase tracking-[0.25em] transition-all hover:scale-110">Signal Feedback</button>
-            </div>
-
-            <div className="px-6 py-3 bg-white dark:bg-slate-950 rounded-full border border-slate-200 dark:border-slate-800 shadow-xl flex items-center gap-3">
-              <div className="relative">
-                <div className="w-2 h-2 rounded-full bg-emerald-500"></div>
-                <div className="absolute inset-0 w-2 h-2 rounded-full bg-emerald-500 animate-ping"></div>
-              </div>
-              <p className="text-[11px] font-black text-slate-900 dark:text-white uppercase tracking-widest">© 2026 Core Intelligence</p>
-            </div>
-          </div>
-        </div>
-      </motion.footer>
-      {/* Search Overlay */}
-      <AnimatePresence>
-        {isSearchOpen && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 z-[110] bg-slate-900/60 backdrop-blur-md p-4 sm:p-8 flex items-start justify-center"
-          >
-            <motion.div
-              initial={{ scale: 0.9, y: 20 }}
-              animate={{ scale: 1, y: 0 }}
-              exit={{ scale: 0.9, y: 20 }}
-              role="dialog"
-              aria-modal="true"
-              aria-labelledby="search-modal-title"
-              className="w-full max-w-2xl bg-white dark:bg-slate-900 rounded-[2rem] shadow-2xl overflow-hidden mt-12 border border-slate-100 dark:border-slate-800"
-            >
-              <div className="p-6 border-b border-slate-100 dark:border-slate-800 flex items-center gap-4">
-                <Search className="text-blue-600 dark:text-blue-400" size={24} aria-hidden="true" />
-                <h2 id="search-modal-title" className="sr-only">Search Doctorian AI</h2>
-                <input 
-                  autoFocus
-                  type="text"
-                  placeholder="Search for symptoms, doctors, or records..."
-                  className="flex-1 bg-transparent border-none outline-none text-lg font-bold text-slate-900 dark:text-white placeholder:text-slate-300 dark:placeholder:text-slate-600"
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  aria-label="Search symptoms, doctors, or records"
-                />
-                <button 
-                  onClick={() => setIsSearchOpen(false)}
-                  className="p-2 text-slate-400 hover:text-slate-900 dark:hover:text-white transition-colors"
-                  aria-label="Close search"
-                >
-                  <PlusCircle size={24} className="rotate-45" aria-hidden="true" />
-                </button>
-              </div>
-              <div className="flex-1 overflow-y-auto p-6 sm:p-8 custom-scrollbar">
-                {searchQuery.trim() === '' ? (
-                  <>
-                    <p className="text-xs font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-6">Quick Suggestions</p>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                      {filteredSearchResults.slice(0, 4).map((sug, i) => (
-                        <button
-                          key={i}
-                          onClick={() => {
-                            setCurrentView(sug.view as any);
-                            setIsSearchOpen(false);
-                            setSearchQuery('');
-                          }}
-                          className="flex items-center gap-4 p-4 bg-slate-50 dark:bg-slate-800 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-2xl transition-all group border border-transparent hover:border-blue-100 dark:hover:border-blue-800"
-                        >
-                          <div className="w-10 h-10 rounded-xl bg-white dark:bg-slate-700 flex items-center justify-center text-slate-400 group-hover:text-blue-600 transition-colors shadow-sm">
-                            {sug.icon}
-                          </div>
-                          <div className="text-left">
-                            <p className="text-sm font-black text-slate-700 dark:text-slate-200 group-hover:text-blue-700 dark:group-hover:text-blue-400">{sug.label}</p>
-                            <p className="text-[10px] font-bold text-slate-400 dark:text-slate-500">{sug.category}</p>
-                          </div>
-                        </button>
-                      ))}
+            ) : (
+              <div className="space-y-4">
+                {searchResults.map((result, i) => (
+                  <button
+                    key={i}
+                    onClick={() => {
+                      setCurrentView(result.view as any);
+                      setIsSearchOpen(false);
+                      setSearchQuery('');
+                    }}
+                    className="w-full flex items-center gap-5 p-5 bg-slate-50 dark:bg-slate-800/50 hover:bg-blue-50 dark:hover:bg-blue-900/10 rounded-3xl transition-all group"
+                  >
+                    <div className="w-12 h-12 rounded-2xl bg-white dark:bg-slate-800 flex items-center justify-center text-slate-400 group-hover:text-blue-600 transition-all">
+                      {result.icon}
                     </div>
-                  </>
-                ) : (
-                  <div className="space-y-6">
-                    <div className="flex items-center justify-between">
-                      <p className="text-xs font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest">
-                        Search Results ({searchResults.length})
-                      </p>
-                      {searchResults.length > 0 && (
-                        <span className="text-[10px] font-bold text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20 px-2 py-1 rounded-lg">
-                          Found in {new Set(searchResults.map(r => r.category)).size} categories
-                        </span>
-                      )}
+                    <div className="text-left flex-1">
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className="text-sm font-black text-slate-900 dark:text-white">{result.label}</span>
+                        <span className="text-[8px] font-black px-2 py-0.5 rounded-full bg-slate-200 dark:bg-slate-700 text-slate-500 uppercase tracking-widest">{result.category}</span>
+                      </div>
+                      <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">{result.description}</p>
                     </div>
-
-                    {searchResults.length > 0 ? (
-                      <div className="grid grid-cols-1 gap-3">
-                        {searchResults.map((result, i) => (
-                          <motion.button
-                            initial={{ opacity: 0, x: -10 }}
-                            animate={{ opacity: 1, x: 0 }}
-                            transition={{ delay: i * 0.05 }}
-                            key={i}
-                            onClick={() => {
-                              setCurrentView(result.view as any);
-                              setIsSearchOpen(false);
-                              setSearchQuery('');
-                              if (result.prompt) {
-                                // We could pass the prompt to ChatInterface here if we had a way to trigger it
-                                // For now, just navigating is good
-                              }
-                            }}
-                            className="flex items-center gap-5 p-5 bg-slate-50 dark:bg-slate-800 hover:bg-white dark:hover:bg-slate-700 rounded-3xl transition-all group border-2 border-transparent hover:border-blue-500 shadow-sm hover:shadow-xl hover:shadow-blue-100 dark:hover:shadow-blue-900/10"
-                          >
-                            <div className="w-12 h-12 rounded-2xl bg-white dark:bg-slate-600 flex items-center justify-center text-slate-400 group-hover:text-blue-600 group-hover:scale-110 transition-all shadow-sm">
-                              {result.icon}
-                            </div>
-                            <div className="text-left flex-1">
-                              <div className="flex items-center gap-2 mb-1">
-                                <span className="text-sm font-black text-slate-900 dark:text-white group-hover:text-blue-600 transition-colors">{result.label}</span>
-                                <span className="text-[8px] font-black px-2 py-0.5 rounded-full bg-slate-200 dark:bg-slate-700 text-slate-500 dark:text-slate-400 uppercase tracking-widest">
-                                  {result.category}
-                                </span>
-                              </div>
-                              <p className="text-xs text-slate-500 dark:text-slate-400 font-medium line-clamp-1">{result.description}</p>
-                            </div>
-                            <div className="opacity-0 group-hover:opacity-100 transition-opacity pr-2">
-                              <PlusCircle className="text-blue-600 rotate-45" size={20} />
-                            </div>
-                          </motion.button>
-                        ))}
-                      </div>
-                    ) : (
-                      <div className="py-12 text-center">
-                        <div className="w-16 h-16 bg-slate-50 dark:bg-slate-800 rounded-full flex items-center justify-center mx-auto mb-4 text-slate-300">
-                          <Search size={32} />
-                        </div>
-                        <p className="text-slate-900 dark:text-white font-black">No results found for "{searchQuery}"</p>
-                        <p className="text-slate-500 dark:text-slate-400 text-sm font-bold mt-2">Try searching for symptoms, tools, or help topics.</p>
-                        <button 
-                          onClick={() => setSearchQuery('')}
-                          className="mt-6 text-blue-600 dark:text-blue-400 font-black text-xs hover:underline"
-                        >
-                          Clear Search
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                )}
+                  </button>
+                ))}
               </div>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      {/* Floating Download Button */}
-      <AnimatePresence>
-        {showInstallButton && !isStandalone && (
-          <div className="fixed bottom-20 left-4 sm:bottom-8 sm:left-8 z-[100] flex flex-col items-start gap-2">
-            <motion.div
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="px-3 py-1 bg-blue-600/90 backdrop-blur-md text-white text-[8px] font-black uppercase tracking-[0.2em] rounded-full shadow-lg border border-white/20 ml-2"
-            >
-              DR. AI - INSTALLER
-            </motion.div>
-            <motion.button
-              initial={{ scale: 0, opacity: 0, x: -20 }}
-              animate={{ 
-                scale: [1, 1.05, 1],
-                opacity: 1, 
-                x: 0 
-              }}
-              transition={{
-                scale: {
-                  repeat: Infinity,
-                  duration: 3,
-                  ease: "easeInOut"
-                }
-              }}
-              exit={{ scale: 0, opacity: 0, x: -20 }}
-              onClick={handleDirectInstall}
-              id="install-app"
-              name="install-app"
-              className="bg-blue-600 text-white p-4 sm:p-5 rounded-full shadow-[0_15px_30px_-5px_rgba(37,99,235,0.4),inset_0_-4px_0_0_#1d4ed8] hover:shadow-[0_20px_40px_-5px_rgba(37,99,235,0.6),inset_0_-4px_0_0_#1d4ed8] hover:-translate-y-1 active:translate-y-1 active:shadow-[0_5px_10px_-2px_rgba(37,99,235,0.4),inset_0_0px_0_0_#1d4ed8] transition-all group flex items-center gap-3 border-4 border-white dark:border-slate-900"
-              title={isInIframe ? "Launch Standalone Window" : "Install Doctorian App (.APK)"}
-            >
-              <div className="relative">
-                <Download size={24} className="sm:w-7 sm:h-7 stroke-[3px] drop-shadow-md" />
-                <motion.div 
-                  animate={{ y: [0, 3, 0] }}
-                  transition={{ repeat: Infinity, duration: 1.5 }}
-                  className="absolute -top-1 -right-1 w-2 h-2 bg-white rounded-full shadow-sm"
-                />
-              </div>
-              <span className="max-w-xs overflow-hidden transition-all duration-500 font-black text-xs sm:text-sm whitespace-nowrap drop-shadow-sm uppercase">
-                {isInIframe ? "Launch App" : "INSTALL APP"}
-              </span>
-            </motion.button>
+            )}
           </div>
-        )}
-      </AnimatePresence>
+        </motion.div>
+      </motion.div>
+    )}
+  </AnimatePresence>
 
-      {/* Removed FloatingAI as features are now in Doctorian AI page */}
+  <AdminInfoModal 
+    isOpen={isAdminInfoOpen} 
+    onClose={() => setIsAdminInfoOpen(false)} 
+  />
+  <AuthModal 
+    isOpen={isAuthModalOpen} 
+    onClose={() => setIsAuthModalOpen(false)} 
+    onSuccess={(u) => {
+      setUser(u);
+      setToast({ message: `Access sequence confirmed. Welcome ${u.displayName || u.email}.`, type: 'success' });
+    }} 
+    initialView={authModalView}
+  />
+  <HealthTipModal 
+    isOpen={isTipModalOpen}
+    onClose={() => setIsTipModalOpen(false)}
+    tip={dailyTip}
+  />
 
-      <AdminInfoModal 
-        isOpen={isAdminInfoOpen} 
-        onClose={() => setIsAdminInfoOpen(false)} 
-      />
-      <AuthModal 
-        isOpen={isAuthModalOpen} 
-        onClose={() => setIsAuthModalOpen(false)} 
-        onSuccess={(u) => {
-          setUser(u);
-          setToast({ message: `Welcome ${u.displayName || u.email}!`, type: 'success' });
-        }} 
-        initialView={authModalView}
-      />
-
-      <HealthTipModal 
-        isOpen={isTipModalOpen}
-        onClose={() => setIsTipModalOpen(false)}
-        tip={dailyTip}
-      />
-
-      {/* Toast Notification */}
-      <AnimatePresence>
-        {toast && (
-          <motion.div
-            initial={{ opacity: 0, y: 50, scale: 0.9 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: 20, scale: 0.9 }}
-            className={`fixed bottom-8 left-1/2 -translate-x-1/2 z-[200] px-6 py-3 rounded-2xl shadow-2xl font-black text-sm flex items-center gap-3 ${
-              toast.type === 'success' ? 'bg-blue-600 text-white' : 
-              toast.type === 'info' ? 'bg-slate-900 dark:bg-white text-white dark:text-slate-900 border border-slate-700 dark:border-slate-200' :
-              'bg-rose-600 text-white'
-            }`}
-          >
-            {toast.type === 'success' ? <Stethoscope size={20} /> : 
-             toast.type === 'info' ? <Info size={20} /> :
-             <ShieldAlert size={20} />}
-            {toast.message}
-          </motion.div>
-        )}
-      </AnimatePresence>
+  {/* Toast Notification */}
+  <AnimatePresence>
+    {toast && (
+      <motion.div
+        initial={{ opacity: 0, y: 50 }}
+        animate={{ opacity: 1, y: 0 }}
+        exit={{ opacity: 0, scale: 0.95 }}
+        className={`fixed bottom-8 left-1/2 -translate-x-1/2 z-[200] px-8 py-4 rounded-[2rem] shadow-2xl font-black text-[10px] uppercase tracking-widest flex items-center gap-4 border ${
+          toast.type === 'success' ? 'bg-blue-600 border-blue-500 text-white shadow-blue-500/20' : 
+          toast.type === 'info' ? 'bg-slate-900 dark:bg-white text-white dark:text-slate-900 border-slate-700 dark:border-slate-200' :
+          'bg-rose-600 border-rose-500 text-white shadow-rose-500/20'
+        }`}
+      >
+        <Zap size={16} />
+        {toast.message}
+      </motion.div>
+    )}
+  </AnimatePresence>
         </div>
-      </div>
-
-      {/* Mobile Navigation Dock - Bottom Floating */}
-      <div className="md:hidden fixed bottom-6 left-6 right-6 z-[100] h-16 bg-white/90 dark:bg-slate-900/90 backdrop-blur-xl rounded-2xl border border-slate-200 dark:border-slate-800 shadow-2xl flex items-center justify-around px-4">
-        {mobileNavLinks.map((link) => (
-          <button
-            key={link.id}
-            onClick={() => setCurrentView(link.id as any)}
-            className={`p-3 rounded-xl transition-all ${
-              currentView === link.id 
-                ? 'bg-blue-600 text-white shadow-lg' 
-                : 'text-slate-400 hover:text-blue-600 hover:bg-blue-50'
-            }`}
-          >
-            {React.cloneElement(link.icon as any, { size: 20 })}
-          </button>
-        ))}
+        <Footer onNavigate={(view) => setCurrentView(view)} />
       </div>
     </div>
   );

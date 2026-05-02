@@ -45,6 +45,18 @@
     @apply bg-slate-950 text-slate-100;
   }
 
+  /* High legibility classes for vision impaired users */
+  .text-high-visibility {
+    @apply font-bold tracking-normal leading-relaxed;
+    text-rendering: optimizeLegibility;
+  }
+
+  @media (max-width: 640px) {
+    html {
+      font-size: 110%; /* Slightly scale up everything on small screens */
+    }
+  }
+
   body.eye-care-mode::after {
     content: "";
     position: fixed;

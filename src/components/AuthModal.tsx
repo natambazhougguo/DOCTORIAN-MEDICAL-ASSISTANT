@@ -425,6 +425,41 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onSuccess
                   </div>
                 )}
 
+                {view === 'login' && authMethod === 'biometric' && (
+                  <div className="flex flex-col items-center justify-center py-6 mb-8 relative">
+                    <div className="absolute inset-0 flex items-center justify-center opacity-10 pointer-events-none">
+                       <Logo size="lg" className="scale-[3] blur-3xl grayscale rotate-12" />
+                    </div>
+                    
+                    <motion.div 
+                      animate={isBiometricLoading ? { 
+                        scale: [1, 1.1, 1],
+                        rotate: [0, 5, -5, 0],
+                        opacity: [0.5, 1, 0.5]
+                      } : {}}
+                      transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
+                      className="relative z-10 w-24 h-24 rounded-full border-4 border-blue-500/20 flex items-center justify-center mb-6 overflow-hidden"
+                    >
+                       <div className="absolute inset-0 bg-blue-500/5" />
+                       <Fingerprint size={48} className={isBiometricLoading ? "text-blue-500 animate-pulse" : biometricSuccess ? "text-emerald-500" : "text-slate-200 dark:text-slate-700"} />
+                       {isBiometricLoading && (
+                         <motion.div 
+                           animate={{ y: [-48, 48, -48] }}
+                           transition={{ duration: 1.5, repeat: Infinity, ease: "linear" }}
+                           className="absolute w-full h-0.5 bg-blue-500/50 shadow-[0_0_10px_rgba(59,130,246,0.8)]"
+                         />
+                       )}
+                    </motion.div>
+
+                    <h4 className="text-sm font-black text-slate-900 dark:text-white uppercase tracking-tighter mb-1 relative z-10">
+                      {isBiometricLoading ? 'Synchronizing Neural Link...' : biometricSuccess ? 'Identity Verified' : 'Neural Identity Scan'}
+                    </h4>
+                    <p className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest relative z-10">
+                      {isBiometricLoading ? 'Verifying biologic patterns' : biometricSuccess ? 'Protocol accepted' : 'Biometric validation required'}
+                    </p>
+                  </div>
+                )}
+
                 {(view === 'signup' || (view === 'login' && authMethod === 'password') || view === 'forgot-password' || view === 'verify-code' || view === 'reset-password') ? (
                   <div className="space-y-6">
                     {(view === 'login' || view === 'signup') && (
@@ -483,42 +518,30 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onSuccess
                     </button>
                   </div>
                 ) : (
-                  <div className={`grid grid-cols-2 gap-4 pt-2 transition-opacity ${!agreedToTerms ? 'opacity-50 pointer-events-none' : ''}`}>
+                  <div className={`pt-2 transition-opacity ${!agreedToTerms ? 'opacity-50 pointer-events-none' : ''}`}>
                     <button
                       type="button"
                       onClick={() => handleBiometricAuth('fingerprint')}
                       disabled={isBiometricLoading || biometricSuccess || !agreedToTerms}
-                      className={`flex flex-col items-center gap-3 p-5 rounded-3xl border-2 transition-all group ${
-                        biometricSuccess ? 'bg-emerald-50 dark:bg-emerald-900/20 border-emerald-200 dark:border-emerald-800 text-emerald-600 dark:text-emerald-400' : 'bg-slate-50 dark:bg-slate-800/50 border-transparent hover:border-blue-200 dark:hover:border-blue-800 hover:bg-white dark:hover:bg-slate-800'
+                      className={`w-full flex items-center justify-center gap-4 p-5 rounded-3xl border-2 transition-all group ${
+                        biometricSuccess ? 'bg-emerald-50 dark:bg-emerald-900/20 border-emerald-200 dark:border-emerald-800 text-emerald-600 dark:text-emerald-400' : 'bg-blue-600 text-white border-transparent hover:bg-blue-700 shadow-xl shadow-blue-500/20'
                       }`}
                     >
-                      <div className={`p-3 rounded-2xl transition-all ${
-                        biometricSuccess ? 'bg-emerald-500 text-white' : 'bg-white dark:bg-slate-700 text-slate-400 dark:text-slate-500 group-hover:text-blue-600 group-hover:shadow-lg group-hover:shadow-blue-100 dark:group-hover:shadow-blue-900/20'
+                      <div className={`p-2.5 rounded-xl transition-all ${
+                        biometricSuccess ? 'bg-emerald-500 text-white' : 'bg-white/20 text-white'
                       }`}>
                         {biometricSuccess ? <ShieldCheck size={24} /> : <Fingerprint size={24} />}
                       </div>
-                      <span className="text-[10px] font-black uppercase tracking-widest">
-                        {isBiometricLoading ? 'Scanning...' : biometricSuccess ? 'Verified' : 'Fingerprint'}
+                      <span className="text-sm font-black uppercase tracking-widest">
+                        {isBiometricLoading ? 'SCANNING...' : biometricSuccess ? 'IDENTITY VERIFIED' : 'INITIATE NEURAL SCAN'}
                       </span>
                     </button>
-
-                    <button
-                      type="button"
-                      onClick={() => handleBiometricAuth('face')}
-                      disabled={isBiometricLoading || biometricSuccess}
-                      className={`flex flex-col items-center gap-3 p-5 rounded-3xl border-2 transition-all group ${
-                        biometricSuccess ? 'bg-emerald-50 dark:bg-emerald-900/20 border-emerald-200 dark:border-emerald-800 text-emerald-600 dark:text-emerald-400' : 'bg-slate-50 dark:bg-slate-800/50 border-transparent hover:border-blue-200 dark:hover:border-blue-800 hover:bg-white dark:hover:bg-slate-800'
-                      }`}
-                    >
-                      <div className={`p-3 rounded-2xl transition-all ${
-                        biometricSuccess ? 'bg-emerald-500 text-white' : 'bg-white dark:bg-slate-700 text-slate-400 dark:text-slate-500 group-hover:text-blue-600 group-hover:shadow-lg group-hover:shadow-blue-100 dark:group-hover:shadow-blue-900/20'
-                      }`}>
-                        {biometricSuccess ? <ShieldCheck size={24} /> : <ScanFace size={24} />}
-                      </div>
-                      <span className="text-[10px] font-black uppercase tracking-widest">
-                        {isBiometricLoading ? 'Scanning...' : biometricSuccess ? 'Verified' : 'Face ID'}
-                      </span>
-                    </button>
+                    
+                    {!biometricSuccess && !isBiometricLoading && (
+                      <p className="mt-4 text-[9px] font-bold text-slate-400 dark:text-slate-500 text-center uppercase tracking-widest">
+                        System supports Face ID, Fingerprint, and Hardware Keys
+                      </p>
+                    )}
                   </div>
                 )}
               </form>

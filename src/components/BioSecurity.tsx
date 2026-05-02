@@ -199,14 +199,14 @@ export const BioSecurity: React.FC = () => {
 
       <div className="flex-1 flex flex-col lg:flex-row overflow-hidden">
         {/* Left Side: System Logs & Node Map */}
-        <div className="lg:w-2/3 p-10 overflow-y-auto custom-scrollbar flex flex-col gap-10">
-          <div className="bg-slate-900 rounded-[2.5rem] p-10 text-white shadow-2xl relative overflow-hidden">
+        <div className="lg:w-2/3 p-6 sm:p-10 overflow-y-auto custom-scrollbar flex flex-col gap-8 sm:gap-10">
+          <div className="bg-slate-900 rounded-[2rem] sm:rounded-[2.5rem] p-6 sm:p-10 text-white shadow-2xl relative overflow-hidden">
             <div className="absolute top-0 right-0 p-10 opacity-5">
               <Scan size={200} />
             </div>
             <div className="relative z-10">
               <h3 className="text-sm font-black uppercase tracking-[0.3em] text-blue-400 mb-8">Node Distribution Matrix</h3>
-              <div className="grid grid-cols-10 gap-3">
+              <div className="grid grid-cols-5 sm:grid-cols-8 lg:grid-cols-10 gap-2 sm:gap-3">
                 {nodes.map((node, i) => (
                   <motion.div
                     key={node.id}
@@ -260,7 +260,7 @@ export const BioSecurity: React.FC = () => {
         </div>
 
         {/* Right Side: Search & Management */}
-        <div className="lg:w-1/3 bg-slate-50/50 dark:bg-slate-800/30 border-l border-slate-100 dark:border-slate-800 p-10 overflow-y-auto custom-scrollbar">
+        <div className="lg:w-1/3 bg-slate-50/50 dark:bg-slate-800/30 border-l border-slate-100 dark:border-slate-800 p-6 sm:p-10 overflow-y-auto custom-scrollbar">
           <div className="relative mb-8">
             <Search className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
             <input 

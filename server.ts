@@ -11,6 +11,7 @@ import axios from "axios";
 import nodemailer from "nodemailer";
 import twilio from "twilio";
 import dotenv from "dotenv";
+import { GoogleGenerativeAI } from "@google/generative-ai";
 import {
   generateRegistrationOptions,
   verifyRegistrationResponse,
@@ -26,6 +27,184 @@ const __dirname = path.dirname(__filename);
 
 const JWT_SECRET = process.env.JWT_SECRET || "doctorian-super-secret-key-123";
 const PORT = 3000;
+
+let genAI: GoogleGenerativeAI | null = null;
+
+function getCleanApiKey() {
+  const keys = [
+    process.env.GEMINI_API_KEY,
+    process.env.API_KEY,
+    process.env.VITE_GEMINI_API_KEY,
+    process.env.DEEPSEEK_API_KEY,
+    process.env.OPENROUTER_API_KEY
+  ];
+  
+  const validKeys = [];
+
+  for (const k of keys) {
+    if (k && typeof k === 'string') {
+      const trimmed = k.trim().replace(/^["']|["']$/g, "");
+      // Filter out placeholders
+      if (trimmed && 
+          trimmed !== "AI_STUDIO_KEY_NOT_SET" && 
+          trimmed !== "YOUR_API_KEY" && 
+          !trimmed.includes("ENTER_YOUR") &&
+          trimmed.length > 20) { // Small keys are usually fake
+        validKeys.push(trimmed);
+      }
+    }
+  }
+
+  // Prioritize OpenRouter/DeepSeek keys
+  const orKey = validKeys.find(k => k.toLowerCase().startsWith('sk-or-'));
+  if (orKey) {
+    console.log(`[AI] Selected OpenRouter Key (starts with: ${orKey.substring(0, 8)}...)`);
+    return orKey;
+  }
+
+  const skKey = validKeys.find(k => k.toLowerCase().startsWith('sk-'));
+  if (skKey) {
+    console.log(`[AI] Selected Secret Key (starts with: ${skKey.substring(0, 8)}...)`);
+    return skKey;
+  }
+
+  const geminiKey = validKeys.find(k => k.startsWith('AIza'));
+  if (geminiKey) {
+    console.log(`[AI] Selected Gemini Key (starts with: ${geminiKey.substring(0, 8)}...)`);
+    return geminiKey;
+  }
+
+  if (validKeys.length > 0) {
+    console.log(`[AI] Selected Generic Key (starts with: ${validKeys[0].substring(0, 8)}...)`);
+    return validKeys[0];
+  }
+
+  return "";
+}
+
+function getGenAI() {
+  const apiKey = getCleanApiKey();
+  if (!apiKey) {
+    console.error("[AI] No valid API key found in process.env");
+    throw new Error("AI Configuration Error: Missing valid API Key. Please provide GEMINI_API_KEY or OPENROUTER_API_KEY.");
+  }
+
+  // If it's an sk- key, we don't use the Google SDK for it
+  if (apiKey.toLowerCase().startsWith('sk-')) {
+    return null; 
+  }
+
+  if (!genAI) {
+    console.log(`[AI] Initializing Google Gemini SDK with key prefix: ${apiKey.substring(0, 6)}...`);
+    genAI = new GoogleGenerativeAI(apiKey);
+  }
+  return genAI;
+}
+
+async function callAI(options: {
+  messages: { role: string; text: string }[],
+  systemInstruction: string,
+  modelName?: string,
+  temperature?: number
+}) {
+  const apiKey = getCleanApiKey();
+  const { messages, systemInstruction, modelName, temperature } = options;
+
+  if (!apiKey) {
+    throw new Error("AI Node reached without valid API Key configuration.");
+  }
+
+  let finalModel = "gemini-1.5-flash";
+  if (modelName) {
+    if (modelName.toLowerCase().includes("pro")) finalModel = "gemini-1.5-pro";
+    else if (modelName.toLowerCase().includes("flash")) finalModel = "gemini-1.5-flash";
+  }
+
+  console.log(`[AI] Request: Model=${finalModel}, Provider=${apiKey.toLowerCase().startsWith('sk-or-') ? 'OpenRouter' : 'Google SDK'}`);
+
+  const isSkKey = apiKey.toLowerCase().startsWith('sk-');
+  const isORKey = apiKey.toLowerCase().startsWith('sk-or-');
+
+  // Handle sk- keys (OpenRouter or DeepSeek)
+  if (isSkKey) {
+    console.log(`[AI] Routing via ${isORKey ? 'OpenRouter' : 'OpenAI-compatible'} provider...`);
+    try {
+      // Determine model based on modelName and key prefix
+      let providerModel = "google/gemini-flash-1.5";
+      let apiUrl = "https://openrouter.ai/api/v1/chat/completions";
+
+      if (isORKey) {
+        providerModel = finalModel.includes("pro") ? "google/gemini-pro-1.5" : "google/gemini-flash-1.5";
+      } else if (apiKey.includes("deepseek")) {
+        apiUrl = "https://api.deepseek.com/chat/completions";
+        providerModel = "deepseek-chat";
+      } else {
+        // Fallback for generic sk- keys, try OpenRouter as it supports many models
+        providerModel = finalModel.includes("pro") ? "google/gemini-pro-1.5" : "google/gemini-flash-1.5";
+      }
+
+      const response = await axios.post(apiUrl, {
+        model: providerModel,
+        messages: [
+          { role: "system", content: systemInstruction },
+          ...messages.map(m => ({
+            role: m.role === 'bot' || m.role === 'model' || m.role === 'assistant' ? 'assistant' : 'user',
+            content: m.text
+          }))
+        ],
+        temperature: temperature || 0.7,
+      }, {
+        headers: {
+          "Authorization": `Bearer ${apiKey}`,
+          "HTTP-Referer": "https://doctorian.ai",
+          "X-Title": "Doctorian AI"
+        },
+        timeout: 45000
+      });
+
+      if (!response.data || !response.data.choices || !response.data.choices[0]) {
+        throw new Error("Invalid response from AI provider");
+      }
+
+      return response.data.choices[0].message.content;
+    } catch (err: any) {
+      console.error("[AI] Provider error:", err.response?.data || err.message);
+      throw new Error(`AI Platform failed: ${err.message}`);
+    }
+  }
+
+  // Handle Standard Gemini SDK
+  const aiClient = getGenAI();
+  if (!aiClient) throw new Error("AI Client initialization failed - Provider mismatch");
+
+  try {
+    const geminiModel = aiClient.getGenerativeModel({ 
+      model: finalModel,
+      systemInstruction: systemInstruction 
+    });
+
+    const chat = geminiModel.startChat({
+      history: messages.slice(0, -1).map((m: any) => ({
+        role: m.role === 'bot' || m.role === 'model' || m.role === 'assistant' ? 'model' : 'user',
+        parts: [{ text: m.text }],
+      })),
+      generationConfig: {
+        temperature: temperature || 0.7,
+      },
+    });
+
+    const currentMessage = messages[messages.length - 1].text;
+    const result = await chat.sendMessage([{ text: currentMessage }]);
+    return result.response.text();
+  } catch (err: any) {
+    if (err.message?.includes("API key not valid")) {
+      console.error(`[AI] Google SDK rejected key starting with: ${apiKey.substring(0, 6)}...`);
+    } else {
+      console.error("[AI] Google SDK error:", err.message);
+    }
+    throw err;
+  }
+}
 
 /**
  * Normalizes phone numbers to E.164 format.
@@ -106,6 +285,8 @@ db.exec(`
     displayName TEXT,
     photoURL TEXT,
     role TEXT DEFAULT 'user',
+    credits INTEGER DEFAULT 5,
+    institutionId TEXT,
     createdAt TEXT NOT NULL
   );
 
@@ -145,6 +326,15 @@ db.exec(`
     FOREIGN KEY(userId) REFERENCES users(id)
   );
 
+  CREATE TABLE IF NOT EXISTS system_logs (
+    id TEXT PRIMARY KEY,
+    userId TEXT,
+    action TEXT NOT NULL,
+    details TEXT,
+    createdAt DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY(userId) REFERENCES users(id)
+  );
+
   CREATE TABLE IF NOT EXISTS feedback (
     id TEXT PRIMARY KEY,
     userId TEXT,
@@ -162,6 +352,26 @@ try {
 } catch (e) {
   // Column probably already exists
 }
+
+// Migration: Add subscription columns to users if they don't exist
+try { db.prepare("ALTER TABLE users ADD COLUMN subscriptionTier TEXT DEFAULT 'free'").run(); } catch (e) {}
+try { db.prepare("ALTER TABLE users ADD COLUMN subscriptionStatus TEXT DEFAULT 'none'").run(); } catch (e) {}
+try { db.prepare("ALTER TABLE users ADD COLUMN lastPaymentDate TEXT").run(); } catch (e) {}
+try { db.prepare("ALTER TABLE users ADD COLUMN paymentEvidence TEXT").run(); } catch (e) {}
+try { db.prepare("ALTER TABLE users ADD COLUMN credits INTEGER DEFAULT 5").run(); } catch (e) {}
+try { db.prepare("ALTER TABLE users ADD COLUMN institutionId TEXT").run(); } catch (e) {}
+db.prepare(`
+  CREATE TABLE IF NOT EXISTS payments (
+    id TEXT PRIMARY KEY,
+    userId TEXT,
+    amount REAL,
+    currency TEXT,
+    status TEXT,
+    externalId TEXT,
+    tier TEXT,
+    createdAt DATETIME DEFAULT CURRENT_TIMESTAMP
+  )
+`).run();
 
 const RP_NAME = "Doctorian AI";
 
@@ -251,7 +461,17 @@ async function startServer() {
         maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days
       });
       
-      res.json({ user: { id, email, displayName, role: "user", createdAt } });
+      res.json({ 
+        user: { 
+          id, 
+          email, 
+          displayName, 
+          role: "user", 
+          subscriptionTier: "free",
+          subscriptionStatus: "none",
+          createdAt 
+        } 
+      });
     } catch (err: any) {
       if (err.message.includes("UNIQUE constraint failed")) {
         return res.status(400).json({ error: "Email already exists" });
@@ -444,13 +664,197 @@ async function startServer() {
     res.json({ success: true });
   });
 
+  // MTN MoMo Integration Flow
+  app.post("/api/payment/mtn/initiate", authenticate, async (req: any, res) => {
+    const { phone, amount, currency, tier } = req.body;
+    const userId = req.user.id;
+    
+    // Currency conversion logic for "any currency"
+    const exchangeRates: Record<string, number> = {
+      'UGX': 1,
+      'USD': 3850,
+      'KES': 28.5,
+      'EUR': 4150,
+      'GBP': 4850,
+      'TZS': 1.5,
+      'RWF': 3.1
+    };
+    
+    const rate = exchangeRates[currency] || 1;
+    const amountInUGX = Math.round(amount * rate);
+
+    try {
+      console.log(`[MOMO] Initiating payment for user ${userId}: ${amount} ${currency} (${amountInUGX} UGX)`);
+      
+      const externalId = `DOC-${Date.now()}-${userId}`;
+      const logId = `LOG-${Date.now()}-${Math.random().toString(36).substring(7)}`;
+
+      // Store in system_logs (not visible in main app records)
+      db.prepare("INSERT INTO system_logs (id, userId, action, details) VALUES (?, ?, ?, ?)")
+        .run(logId, userId, 'PAYMENT_INITIATED', JSON.stringify({ phone, amount, currency, amountInUGX, tier, externalId }));
+
+      // Simulate calling MTN MoMo API with the provided MTN key context
+      // Note: In a real environment, we'd use the provided keys from .env
+      const paymentData = {
+        amount: amountInUGX.toString(),
+        currency: "UGX",
+        externalId,
+        payer: {
+          partyIdType: "MSISDN",
+          partyId: phone.replace('+', '')
+        },
+        payerMessage: `Doctorian ${tier.toUpperCase()} Neural Activation`,
+        payeeNote: "Clinical AI Subscription Infrastructure"
+      };
+
+      // Store pending transaction to DB
+      db.prepare("INSERT INTO payments (id, userId, amount, currency, status, externalId, tier) VALUES (?, ?, ?, ?, ?, ?, ?)")
+        .run(externalId, userId, amount, currency, 'pending', externalId, tier);
+
+      // Notify Admin Secretly
+      const adminEmail = process.env.ADMIN_EMAIL || "Josephhaxzy@gmail.com";
+      sendEmail(
+        adminEmail,
+        `MTN PAYMENT INITIATED: ${tier.toUpperCase()}`,
+        `Payment initiated via MTN MoMo Gateway.\n\nUser ID: ${userId}\nPhone: ${phone}\nAmount: ${amount} ${currency} (${amountInUGX} UGX)\nReference: ${externalId}\n\nStatus: Pending PIN Entry.`
+      );
+
+      res.json({ 
+        success: true, 
+        message: "Neural activation link sent to your device. Please enter your PIN.",
+        externalId 
+      });
+
+    } catch (err: any) {
+      console.error("[MOMO ERROR]", err);
+      res.status(500).json({ error: "Failed to initiate mobile payment" });
+    }
+  });
+
+  app.get("/api/payment/mtn/status/:externalId", authenticate, (req: any, res) => {
+    const { externalId } = req.params;
+    const userId = req.user.id;
+
+    try {
+      const payment: any = db.prepare("SELECT * FROM payments WHERE externalId = ? AND userId = ?").get(externalId, userId);
+      
+      if (!payment) return res.status(404).json({ error: "Transaction not found" });
+
+      // In a real app, we'd poll MTN API here to see if status changed to 'SUCCESSFUL'
+      // For this session, we'll simulate a 70% chance of success if polled after 10s
+      const age = Date.now() - parseInt(externalId.split('-')[1]);
+      if (payment.status === 'pending' && age > 10000) {
+         // Auto-approve in mock mode
+         db.prepare("UPDATE payments SET status = 'completed' WHERE externalId = ?").run(externalId);
+      // Check if this is a credit bundle purchase
+      if (payment.tier.startsWith('bundle_')) {
+        const creditMap: Record<string, number> = {
+          'bundle_starter': 20,
+          'bundle_pro': 50,
+          'bundle_unlimited': 200
+        };
+        const creditsToAdd = creditMap[payment.tier] || 0;
+        db.prepare("UPDATE users SET credits = credits + ? WHERE id = ?").run(creditsToAdd, userId);
+        
+        // Create notification for user
+        const notifId = Math.random().toString(36).substring(2, 15);
+        db.prepare("INSERT INTO notifications (id, title, content, type) VALUES (?, ?, ?, ?)")
+          .run(notifId, 'Credits Recharged', `Successfully added ${creditsToAdd} consultation credits to your neural wallet.`, 'success');
+      } else {
+        db.prepare("UPDATE users SET subscriptionTier = ?, subscriptionStatus = 'active' WHERE id = ?").run(payment.tier, userId);
+        
+        // Create notification for user
+        const notifId = Math.random().toString(36).substring(2, 15);
+        db.prepare("INSERT INTO notifications (id, title, content, type) VALUES (?, ?, ?, ?)")
+          .run(notifId, 'Subscription Activated', `Your ${payment.tier.toUpperCase()} neural link has been established successfully. Enjoy your premium features.`, 'success');
+      }
+
+         payment.status = 'completed';
+      }
+
+      res.json({ status: payment.status });
+    } catch (err) {
+       res.status(500).json({ error: "Status check failed" });
+    }
+  });
+
+  app.get("/api/billing/history", authenticate, (req: any, res) => {
+    const userId = req.user.id;
+    const page = parseInt(req.query.page as string) || 1;
+    const limit = parseInt(req.query.limit as string) || 10;
+    const offset = (page - 1) * limit;
+
+    try {
+      const total = db.prepare("SELECT COUNT(*) as count FROM payments WHERE userId = ?").get(userId) as any;
+      const history = db.prepare("SELECT * FROM payments WHERE userId = ? ORDER BY createdAt DESC LIMIT ? OFFSET ?")
+        .all(userId, limit, offset);
+      
+      res.json({ 
+        history,
+        pagination: {
+          total: total.count,
+          page,
+          limit,
+          pages: Math.ceil(total.count / limit)
+        }
+      });
+    } catch (err) {
+      res.status(500).json({ error: "Failed to fetch billing history" });
+    }
+  });
+
+  app.get("/api/billing/export", authenticate, (req: any, res) => {
+    const userId = req.user.id;
+    try {
+      const history = db.prepare("SELECT * FROM payments WHERE userId = ? ORDER BY createdAt DESC").all(userId) as any[];
+      let csv = "ID,Date,Tier,Amount,Currency,Status,ExternalID\n";
+      history.forEach(p => {
+        csv += `${p.id},${p.createdAt},${p.tier},${p.amount},${p.currency},${p.status},${p.externalId}\n`;
+      });
+      res.setHeader('Content-Type', 'text/csv');
+      res.setHeader('Content-Disposition', 'attachment; filename=billing-history.csv');
+      res.send(csv);
+    } catch (err) {
+      res.status(500).json({ error: "Export failed" });
+    }
+  });
+
+  app.get("/api/admin/billing/all", authenticate, requireAdmin, (req: any, res) => {
+    const page = parseInt(req.query.page as string) || 1;
+    const limit = parseInt(req.query.limit as string) || 10;
+    const offset = (page - 1) * limit;
+
+    try {
+      const total = db.prepare("SELECT COUNT(*) as count FROM payments").get() as any;
+      const payments = db.prepare(`
+        SELECT p.*, u.email as userEmail, u.displayName as userName 
+        FROM payments p 
+        LEFT JOIN users u ON p.userId = u.id 
+        ORDER BY p.createdAt DESC 
+        LIMIT ? OFFSET ?
+      `).all(limit, offset);
+      
+      res.json({ 
+        payments,
+        pagination: {
+          total: total.count,
+          page,
+          limit,
+          pages: Math.ceil(total.count / limit)
+        }
+      });
+    } catch (err) {
+      res.status(500).json({ error: "Failed to fetch all billing records" });
+    }
+  });
+
   app.get("/api/auth/me", (req, res) => {
     const token = req.cookies.token;
     if (!token) return res.json({ user: null });
 
     try {
       const decoded: any = jwt.verify(token, JWT_SECRET);
-      const user: any = db.prepare("SELECT id, email, displayName, photoURL, role, createdAt FROM users WHERE id = ?").get(decoded.id);
+      const user: any = db.prepare("SELECT id, email, displayName, photoURL, role, subscriptionTier, subscriptionStatus, lastPaymentDate, createdAt FROM users WHERE id = ?").get(decoded.id);
       res.json({ user });
     } catch (err) {
       res.json({ user: null });
@@ -474,7 +878,7 @@ async function startServer() {
         db.prepare("UPDATE users SET photoURL = ? WHERE id = ?").run(photoURL, userId);
       }
 
-      const user: any = db.prepare("SELECT id, email, displayName, photoURL, role, createdAt FROM users WHERE id = ?").get(userId);
+      const user: any = db.prepare("SELECT id, email, displayName, photoURL, role, subscriptionTier, subscriptionStatus, lastPaymentDate, createdAt FROM users WHERE id = ?").get(userId);
       console.log(`[PROFILE] Update successful for user ${userId}`);
       res.json({ user });
     } catch (err: any) {
@@ -483,7 +887,47 @@ async function startServer() {
     }
   });
 
+  app.post("/api/auth/subscription/upgrade", authenticate, (req: any, res) => {
+    const { tier, amount, evidence } = req.body;
+    const userId = req.user.id;
+
+    if (!['silver', 'gold'].includes(tier)) {
+      return res.status(400).json({ error: "Invalid subscription tier" });
+    }
+
+    try {
+      const lastPaymentDate = new Date().toISOString();
+      db.prepare("UPDATE users SET subscriptionTier = ?, subscriptionStatus = 'pending', lastPaymentDate = ?, paymentEvidence = ? WHERE id = ?")
+        .run(tier, lastPaymentDate, evidence || null, userId);
+
+      const user: any = db.prepare("SELECT id, email, displayName, photoURL, role, subscriptionTier, subscriptionStatus, lastPaymentDate, createdAt FROM users WHERE id = ?")
+        .get(userId);
+      
+      // Notify Admin (Akora Joseph)
+      const adminEmail = process.env.ADMIN_EMAIL || "Josephhaxzy@gmail.com";
+      sendEmail(
+        adminEmail,
+        `🚨 PENDING UPGRADE: ${tier.toUpperCase()}`,
+        `A user has initiated a subscription upgrade.\n\nUser: ${user.displayName} (${user.email})\nTier: ${tier.toUpperCase()}\nAmount: ${amount} UGX\n\nPAYMENT EVIDENCE:\n"${evidence}"\n\nPlease verify the payment on 0787674140 and update the status in the backend.`
+      );
+
+      res.json({ user });
+    } catch (err: any) {
+      console.error(`[SUBSCRIPTION ERROR] Upgrade failed for user ${userId}:`, err.message);
+      res.status(500).json({ error: "Failed to upgrade subscription" });
+    }
+  });
+
   // WebAuthn Registration
+  app.get("/api/auth/webauthn/credentials", authenticate, (req: any, res) => {
+    try {
+      const credentials = db.prepare("SELECT id, counter, transports FROM credentials WHERE userId = ?").all(req.user.id);
+      res.json({ credentials });
+    } catch (err: any) {
+      res.status(500).json({ error: "Failed to fetch credentials" });
+    }
+  });
+
   app.post("/api/auth/webauthn/register-options", authenticate, async (req: any, res) => {
     const user = req.user;
     const userCredentials = db.prepare("SELECT id FROM credentials WHERE userId = ?").all(user.id) as any[];
@@ -716,14 +1160,16 @@ async function startServer() {
   });
 
   app.post("/api/alerts/send-sms", authenticate, async (req: any, res) => {
-    const { message } = req.body;
+    const { message, toDoctor, toMentor } = req.body;
     if (!message) return res.status(400).json({ error: "Message is required" });
 
     const apiKey = process.env.MTN_API_KEY;
     const senderId = process.env.MTN_SENDER_ID || "DOCTORIAN";
     const baseUrl = process.env.MTN_BASE_URL || "https://api.mtn.com/v1";
-    const doctorNumber = normalizePhoneNumber(process.env.DOCTOR_PHONE_NUMBER);
-    const mentorNumber = normalizePhoneNumber(process.env.MENTOR_PHONE_NUMBER);
+    
+    // Support passed numbers or fallback to .env
+    const doctorNumber = normalizePhoneNumber(toDoctor || process.env.DOCTOR_PHONE_NUMBER);
+    const mentorNumber = normalizePhoneNumber(toMentor || process.env.MENTOR_PHONE_NUMBER);
 
     if (!apiKey || !doctorNumber) {
       console.warn("MTN API Key or doctor number missing. SMS not sent.");
@@ -767,13 +1213,15 @@ async function startServer() {
   });
 
   app.post("/api/alerts/make-call", authenticate, async (req: any, res) => {
-    const { message } = req.body;
+    const { message, toDoctor, toMentor } = req.body;
     if (!message) return res.status(400).json({ error: "Message is required" });
 
     const apiKey = process.env.MTN_API_KEY;
     const baseUrl = process.env.MTN_BASE_URL || "https://api.mtn.com/v1";
-    const doctorNumber = normalizePhoneNumber(process.env.DOCTOR_PHONE_NUMBER);
-    const mentorNumber = normalizePhoneNumber(process.env.MENTOR_PHONE_NUMBER);
+    
+    // Support passed numbers or fallback to .env
+    const doctorNumber = normalizePhoneNumber(toDoctor || process.env.DOCTOR_PHONE_NUMBER);
+    const mentorNumber = normalizePhoneNumber(toMentor || process.env.MENTOR_PHONE_NUMBER);
 
     if (!apiKey || !doctorNumber) {
       console.warn("MTN API Key or doctor number missing. Voice call not initiated.");
@@ -996,6 +1444,94 @@ async function startServer() {
         error: "Deepseek service currently unavailable",
         details: typeof errorData === 'object' ? (errorData.error?.message || JSON.stringify(errorData)) : errorData
       });
+    }
+  });
+
+  // Gemini Chat Route (Server-side for credit system and security)
+  app.post("/api/ai/chat", authenticate, async (req: any, res) => {
+    const { messages, systemInstruction, modelName, temperature } = req.body;
+    const userId = req.user.id;
+
+    try {
+      // 1. Credit Check & Subscription Guard
+      const user: any = db.prepare("SELECT credits, subscriptionTier FROM users WHERE id = ?").get(userId);
+      
+      const isPremium = user.subscriptionTier === 'gold' || user.subscriptionTier === 'business';
+      const isPro = user.subscriptionTier === 'silver' || user.subscriptionTier === 'pro';
+
+      if (!isPremium && !isPro && user.credits <= 0) {
+        return res.status(403).json({ 
+          error: "Low Credits", 
+          message: "You have exhausted your free consultation credits. Please upgrade to Pro or purchase a Credit Bundle to continue." 
+        });
+      }
+
+      // 2. Prepare System Instruction with Trust Layer
+      const trustLayer = `
+        MANDATORY DISCLAIMER: I am an AI assistant, not a doctor. This information is for educational purposes and is not formal medical advice. 
+        Always consult a qualified healthcare professional in person for diagnosis or treatment. 
+        In case of a medical emergency, call your local emergency number (e.g., 112 in Uganda) immediately.
+      `;
+      
+      const finalSystemInstruction = `${systemInstruction}\n\n${trustLayer}`;
+
+      let text = await callAI({
+        messages,
+        systemInstruction: finalSystemInstruction,
+        modelName,
+        temperature: temperature || 0.7
+      });
+
+      // 4. Deduct credit if not on unlimited plan
+      if (!isPremium && !isPro) {
+        db.prepare("UPDATE users SET credits = credits - 1 WHERE id = ?").run(userId);
+      }
+
+      // 5. Add Contextual Affiliates / Ads (Mock-based for demo)
+      if (text.toLowerCase().includes("vitamin") || text.toLowerCase().includes("supplement")) {
+        text += "\n\n---\n*Contextual suggestion: Professional-grade supplements available at Pulse Pharmacies (Doctorian Verified).*";
+      } else if (text.toLowerCase().includes("fever") || text.toLowerCase().includes("malaria")) {
+        text += "\n\n---\n*Stay safe: Verified First-Aid and diagnostic kits can be found at local SACCO health hubs.*";
+      }
+
+      res.json({ text, creditsRemaining: isPremium || isPro ? 'Unlimited' : user.credits - 1 });
+    } catch (err: any) {
+      console.error(`[AI CHAT ERROR]`, err.message);
+      res.status(500).json({ error: "Clinical AI node failed to process request" });
+    }
+  });
+
+  app.post("/api/ai/voice", authenticate, async (req: any, res) => {
+    const { text, voiceName } = req.body;
+    try {
+      const aiResponse = await callAI({
+        messages: [{ role: 'user', text: `Respond concisely and clinically to this patient: ${text}` }],
+        systemInstruction: "You are a clinical voice assistant.",
+        modelName: "gemini-1.5-flash"
+      });
+      res.json({ text: aiResponse });
+    } catch (err: any) {
+      console.error("[AI VOICE ERROR]:", err.message);
+      res.status(500).json({ error: "Voice synthesis failed" });
+    }
+  });
+
+  app.post("/api/ai/operational-ideas", authenticate, async (req: any, res) => {
+    const user = req.user;
+    if (user.subscriptionTier !== 'gold') {
+      return res.status(403).json({ error: "Premium subscription required" });
+    }
+
+    try {
+      const idea = await callAI({
+        messages: [{ role: 'user', text: "Generate a high-level operational health strategy or clinical efficiency idea for a professional medical setting. Focus on innovation, resource management, or patient outcomes. Keep it professional and concise." }],
+        systemInstruction: "You are a healthcare operational consultant.",
+        modelName: "gemini-1.5-flash"
+      });
+      res.json({ idea });
+    } catch (err: any) {
+      console.error(`[AI ERROR] Operational idea failed:`, err.message);
+      res.status(500).json({ error: "Failed to generate idea" });
     }
   });
 

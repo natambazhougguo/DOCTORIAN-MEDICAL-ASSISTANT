@@ -19,16 +19,25 @@ import {
   Scale,
   Bell,
   Send,
-  Plus
+  Plus,
+  Download,
+  CreditCard,
+  ChevronLeft,
+  ChevronRight
 } from 'lucide-react';
 import { api, User, HealthRecord } from '../api';
 
 export const AdminDashboard: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<'users' | 'notifications' | 'system'>('users');
+  const [activeTab, setActiveTab] = useState<'users' | 'notifications' | 'system' | 'billing'>('users');
   const [users, setUsers] = useState<User[]>([]);
   const [notifications, setNotifications] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  
+  // Billing Admin State
+  const [adminBilling, setAdminBilling] = useState<any[]>([]);
+  const [billingPagination, setBillingPagination] = useState({ page: 1, pages: 1, total: 0 });
+  const [loadingBilling, setLoadingBilling] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
@@ -43,6 +52,8 @@ export const AdminDashboard: React.FC = () => {
   // Twilio Status State
   const [twilioStatus, setTwilioStatus] = useState<any>(null);
   const [loadingTwilio, setLoadingTwilio] = useState(false);
+
+  const [filterInstitution, setFilterInstitution] = useState('');
 
   const fetchUsers = async () => {
     setLoading(true);
@@ -66,6 +77,36 @@ export const AdminDashboard: React.FC = () => {
     }
   };
 
+  const fetchBillingData = async (page = 1) => {
+    setLoadingBilling(true);
+    try {
+      const data = await api.admin.listBilling(page, 10);
+      setAdminBilling(data.payments);
+      setBillingPagination(data.pagination);
+    } catch (err: any) {
+      setError(err.message || "Failed to load billing history");
+    } finally {
+      setLoadingBilling(false);
+    }
+  };
+
+  const handleDownloadAllBilling = () => {
+    const csvContent = "Transaction ID,Date,User Name,Email,Plan,Amount,Currency,Status\n" + 
+      adminBilling.map(p => 
+        `${p.externalId},${new Date(p.createdAt).toLocaleDateString()},${p.userName || 'Unknown'},${p.userEmail},${p.tier},${p.amount},${p.currency},${p.status}`
+      ).join("\n");
+
+    const blob = new Blob([csvContent], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `Global-Billing-Report-${new Date().toISOString().split('T')[0]}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
   const fetchTwilioStatus = async () => {
     setLoadingTwilio(true);
     try {
@@ -84,6 +125,8 @@ export const AdminDashboard: React.FC = () => {
       fetchUsers();
     } else if (activeTab === 'notifications') {
       fetchNotifications();
+    } else if (activeTab === 'billing') {
+      fetchBillingData();
     } else {
       fetchTwilioStatus();
     }
@@ -152,10 +195,12 @@ export const AdminDashboard: React.FC = () => {
     }
   };
 
-  const filteredUsers = users.filter(u => 
-    u.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    (u.displayName && u.displayName.toLowerCase().includes(searchQuery.toLowerCase()))
-  );
+  const filteredUsers = users.filter(u => {
+    const matchesSearch = u.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (u.displayName && u.displayName.toLowerCase().includes(searchQuery.toLowerCase()));
+    const matchesInstitution = !filterInstitution || u.institutionId === filterInstitution;
+    return matchesSearch && matchesInstitution;
+  });
 
   const getRecordIcon = (type: string) => {
     switch (type.toLowerCase()) {
@@ -217,6 +262,17 @@ export const AdminDashboard: React.FC = () => {
             Notifs
           </button>
           <button 
+            onClick={() => setActiveTab('billing')}
+            role="tab"
+            aria-selected={activeTab === 'billing'}
+            className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-[10px] sm:text-xs font-black uppercase tracking-widest transition-all whitespace-nowrap ${
+              activeTab === 'billing' ? 'bg-white dark:bg-slate-700 text-blue-600 dark:text-blue-400 shadow-sm' : 'text-slate-400 hover:text-slate-600 dark:hover:text-slate-300'
+            }`}
+          >
+            <CreditCard size={16} aria-hidden="true" />
+            Billing
+          </button>
+          <button 
             onClick={() => setActiveTab('system')}
             role="tab"
             aria-selected={activeTab === 'system'}
@@ -244,16 +300,28 @@ export const AdminDashboard: React.FC = () => {
             exit={{ opacity: 0, y: -10 }}
             className="space-y-8"
           >
-            <div className="relative max-w-md w-full">
-              <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={20} aria-hidden="true" />
-              <input 
-                type="text"
-                placeholder="Search by email or name..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                aria-label="Search users by email or name"
-                className="w-full pl-12 pr-4 py-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl focus:ring-2 focus:ring-blue-500 outline-none transition-all shadow-sm"
-              />
+            <div className="flex flex-col sm:flex-row gap-4 items-center">
+              <div className="relative max-w-md w-full">
+                <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={20} aria-hidden="true" />
+                <input 
+                  type="text"
+                  placeholder="Search by email or name..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  aria-label="Search users by email or name"
+                  className="w-full pl-12 pr-4 py-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl focus:ring-2 focus:ring-blue-500 outline-none transition-all shadow-sm"
+                />
+              </div>
+              <div className="relative w-full sm:w-64">
+                <input 
+                  type="text" 
+                  placeholder="Filter Institution ID..."
+                  value={filterInstitution}
+                  onChange={(e) => setFilterInstitution(e.target.value)}
+                  className="w-full px-4 py-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/50 transition-all font-bold"
+                  aria-label="Filter by institution"
+                />
+              </div>
             </div>
 
             <div aria-live="polite" className="space-y-4">
@@ -381,6 +449,131 @@ export const AdminDashboard: React.FC = () => {
                   </tbody>
                 </table>
               </div>
+            </div>
+          </motion.div>
+        ) : activeTab === 'billing' ? (
+          <motion.div
+            key="billing-tab"
+            id="billing-panel"
+            role="tabpanel"
+            aria-labelledby="tab-billing"
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -10 }}
+            className="space-y-8"
+          >
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-6">
+              <div className="flex items-center gap-4 bg-white dark:bg-slate-900 p-6 rounded-[2rem] border border-slate-100 dark:border-slate-800 shadow-sm flex-1">
+                 <div className="w-14 h-14 rounded-2xl bg-blue-50 dark:bg-blue-900/20 flex items-center justify-center text-blue-600 dark:text-blue-400">
+                    <Activity size={28} />
+                 </div>
+                 <div>
+                    <h3 className="text-xl font-black text-slate-900 dark:text-white uppercase tracking-tighter">Global Billing Infrastructure</h3>
+                    <p className="text-sm text-slate-500 font-medium">Monitoring {billingPagination.total} transactions across 25k+ target users.</p>
+                 </div>
+              </div>
+              <button 
+                onClick={handleDownloadAllBilling}
+                className="flex items-center justify-center gap-3 px-8 py-4 bg-slate-900 dark:bg-blue-600 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest shadow-xl shadow-blue-900/20 active:scale-95 transition-all hover:brightness-110"
+              >
+                <Download size={18} />
+                Export Ledger (CSV)
+              </button>
+            </div>
+
+            <div className="bg-white dark:bg-slate-900 rounded-[2.5rem] border border-slate-100 dark:border-slate-800 shadow-2xl overflow-hidden">
+              <div className="overflow-x-auto">
+                <table className="w-full text-left border-collapse">
+                  <thead>
+                    <tr className="bg-slate-50 dark:bg-slate-800/50 border-b border-slate-100 dark:border-slate-800">
+                      <th className="px-6 py-5 text-xs font-black text-slate-400 uppercase tracking-widest">Transaction / Reference</th>
+                      <th className="px-6 py-5 text-xs font-black text-slate-400 uppercase tracking-widest">Client Identity</th>
+                      <th className="px-6 py-5 text-xs font-black text-slate-400 uppercase tracking-widest text-center">Protocol / Plan</th>
+                      <th className="px-6 py-5 text-xs font-black text-slate-400 uppercase tracking-widest text-right">Magnitude</th>
+                      <th className="px-6 py-5 text-xs font-black text-slate-400 uppercase tracking-widest text-right">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-50 dark:divide-slate-800">
+                    {loadingBilling ? (
+                      <tr>
+                        <td colSpan={5} className="py-32 text-center">
+                          <Loader2 className="w-10 h-10 text-blue-600 animate-spin mx-auto mb-4" />
+                          <p className="text-slate-400 font-black text-[10px] uppercase tracking-widest">Syncing with Billing Gateway...</p>
+                        </td>
+                      </tr>
+                    ) : adminBilling.length > 0 ? (
+                      adminBilling.map((p) => (
+                        <tr key={p.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-all group">
+                          <td className="px-6 py-5">
+                            <div className="flex flex-col">
+                              <span className="text-xs font-black text-slate-900 dark:text-white font-mono uppercase truncate max-w-[150px]">{p.externalId}</span>
+                              <span className="text-[10px] font-bold text-slate-400 uppercase">{new Date(p.createdAt).toLocaleString()}</span>
+                            </div>
+                          </td>
+                          <td className="px-6 py-5">
+                            <div className="flex items-center gap-3">
+                              <div className="w-8 h-8 rounded-lg bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-500 font-black text-[10px]">
+                                {(p.userName || p.userEmail || "?")[0].toUpperCase()}
+                              </div>
+                              <div className="flex flex-col">
+                                <span className="text-xs font-black text-slate-900 dark:text-white uppercase truncate max-w-[150px]">{p.userName || 'Anonymous Node'}</span>
+                                <span className="text-[9px] font-bold text-slate-400">{p.userEmail}</span>
+                              </div>
+                            </div>
+                          </td>
+                          <td className="px-6 py-5 text-center">
+                             <div className={`inline-block px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest ${
+                               p.tier === 'gold' ? 'bg-amber-50 text-amber-600 border border-amber-100' : 'bg-blue-50 text-blue-600 border border-blue-100'
+                             }`}>
+                               {p.tier}
+                             </div>
+                          </td>
+                          <td className="px-6 py-5 text-right font-black text-xs text-slate-900 dark:text-white uppercase whitespace-nowrap">
+                            {p.amount} {p.currency}
+                          </td>
+                          <td className="px-6 py-5 text-right">
+                             <div className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest ${
+                               p.status === 'completed' ? 'bg-emerald-50 text-emerald-600' : 'bg-amber-50 text-amber-600'
+                             }`}>
+                               <div className={`w-1.5 h-1.5 rounded-full ${p.status === 'completed' ? 'bg-emerald-600' : 'bg-amber-600 animate-pulse'}`} />
+                               {p.status}
+                             </div>
+                          </td>
+                        </tr>
+                      ))
+                    ) : (
+                      <tr>
+                        <td colSpan={5} className="py-32 text-center text-slate-400 uppercase font-black text-xs">No billing records in neural history.</td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+              
+              {/* Pagination controls for admin billing */}
+              {billingPagination.pages > 1 && (
+                <div className="p-6 bg-slate-50 dark:bg-slate-800/50 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between">
+                   <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                     Page {billingPagination.page} of {billingPagination.pages} • {billingPagination.total} Total Reports
+                   </p>
+                   <div className="flex gap-2">
+                     <button 
+                       disabled={billingPagination.page === 1}
+                       onClick={() => fetchBillingData(billingPagination.page - 1)}
+                       className="p-3 bg-white dark:bg-slate-700 rounded-2xl border border-slate-100 dark:border-slate-800 text-slate-600 dark:text-slate-200 disabled:opacity-30 hover:shadow-lg transition-all"
+                     >
+                       <ChevronLeft size={18} />
+                     </button>
+                     <button 
+                       disabled={billingPagination.page === billingPagination.pages}
+                       onClick={() => fetchBillingData(billingPagination.page + 1)}
+                       className="p-3 bg-white dark:bg-slate-700 rounded-2xl border border-slate-100 dark:border-slate-800 text-slate-600 dark:text-slate-200 disabled:opacity-30 hover:shadow-lg transition-all"
+                     >
+                       <ChevronRight size={18} />
+                     </button>
+                   </div>
+                </div>
+              )}
             </div>
           </motion.div>
         ) : activeTab === 'notifications' ? (

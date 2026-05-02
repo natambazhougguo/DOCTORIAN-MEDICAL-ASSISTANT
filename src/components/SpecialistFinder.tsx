@@ -1,18 +1,20 @@
 import React, { useState } from 'react';
-import { motion } from 'motion/react';
-import { Search, MapPin, Star, Calendar, MessageSquare, Phone, ShieldCheck, Stethoscope, Heart, Brain, Bone, Eye, Zap } from 'lucide-react';
+import { motion, AnimatePresence } from 'motion/react';
+import { Search, MapPin, Star, Calendar, MessageSquare, Phone, ShieldCheck, Stethoscope, Heart, Brain, Bone, Eye, Zap, X } from 'lucide-react';
+import { AppointmentScheduler } from './AppointmentScheduler';
 
 const Specialists = [
-  { id: 1, name: 'Dr. Sarah Johnson', specialty: 'Cardiologist', rating: 4.9, distance: '2.5 km', availability: 'Available Tomorrow', icon: <Heart className="text-rose-500" />, verified: true },
-  { id: 2, name: 'Dr. Michael Chen', specialty: 'Cognis Specialist', rating: 4.8, distance: '3.8 km', availability: 'Available Today', icon: <Brain className="text-purple-500" />, verified: true },
-  { id: 3, name: 'Dr. Emily Brown', specialty: 'Orthopedic', rating: 4.7, distance: '1.2 km', availability: 'Mon, 20 Oct', icon: <Bone className="text-amber-500" />, verified: false },
-  { id: 4, name: 'Dr. David Wilson', specialty: 'Ophthalmologist', rating: 4.9, distance: '5.0 km', availability: 'Next Week', icon: <Eye className="text-blue-500" />, verified: true },
-  { id: 5, name: 'Dr. Lisa Garcia', specialty: 'General Practitioner', rating: 4.6, distance: '0.8 km', availability: 'Available Today', icon: <Stethoscope className="text-emerald-500" />, verified: true },
+  { id: '1', name: 'Dr. Sarah Johnson', specialty: 'Cardiologist', rating: 4.9, distance: '2.5 km', availability: 'Available Tomorrow', icon: <Heart className="text-rose-500" />, verified: true },
+  { id: '2', name: 'Dr. Michael Chen', specialty: 'Cognis Specialist', rating: 4.8, distance: '3.8 km', availability: 'Available Today', icon: <Brain className="text-purple-500" />, verified: true },
+  { id: '3', name: 'Dr. Emily Brown', specialty: 'Orthopedic', rating: 4.7, distance: '1.2 km', availability: 'Mon, 20 Oct', icon: <Bone className="text-amber-500" />, verified: false },
+  { id: '4', name: 'Dr. David Wilson', specialty: 'Ophthalmologist', rating: 4.9, distance: '5.0 km', availability: 'Next Week', icon: <Eye className="text-blue-500" />, verified: true },
+  { id: '5', name: 'Dr. Lisa Garcia', specialty: 'General Practitioner', rating: 4.6, distance: '0.8 km', availability: 'Available Today', icon: <Stethoscope className="text-emerald-500" />, verified: true },
 ];
 
 export const SpecialistFinder: React.FC = () => {
   const [search, setSearch] = useState('');
   const [activeCategory, setActiveCategory] = useState('All');
+  const [bookingSpecialist, setBookingSpecialist] = useState<any>(null);
 
   const categories = ['All', 'Cardiologist', 'Cognis Specialist', 'Orthopedic', 'Ophthalmologist', 'General Practitioner'];
 
@@ -23,7 +25,37 @@ export const SpecialistFinder: React.FC = () => {
   );
 
   return (
-    <div className="space-y-12 pb-24 px-6">
+    <div className="space-y-12 pb-24 px-6 relative">
+      <AnimatePresence>
+        {bookingSpecialist && (
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[100] flex items-center justify-center p-4 sm:p-6 md:p-12 overflow-hidden"
+          >
+            <div className="absolute inset-0 bg-slate-950/60 backdrop-blur-md" onClick={() => setBookingSpecialist(null)} />
+            <motion.div 
+              initial={{ scale: 0.9, opacity: 0, y: 20 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.9, opacity: 0, y: 20 }}
+              className="relative w-full max-w-4xl h-full flex flex-col pointer-events-auto"
+            >
+              <AppointmentScheduler 
+                specialist={bookingSpecialist} 
+                onClose={() => setBookingSpecialist(null)}
+                onConfirm={(appt) => {
+                  const saved = localStorage.getItem('doctorian_appointments');
+                  const current = saved ? JSON.parse(saved) : [];
+                  const newAppt = { ...appt, id: Math.random().toString(36).substr(2, 9) };
+                  localStorage.setItem('doctorian_appointments', JSON.stringify([...current, newAppt]));
+                  window.dispatchEvent(new Event('storage'));
+                }}
+              />
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
       <header className="flex flex-col gap-10">
         <div className="flex flex-col md:flex-row md:items-end justify-between gap-6">
           <div className="max-w-2xl">
@@ -93,7 +125,10 @@ export const SpecialistFinder: React.FC = () => {
               Skip the clinical queue with enterprise-grade priority. Verified specialists available for immediate bio-sync consultations within 120 minutes of authorization.
             </p>
           </div>
-          <button className="px-10 py-5 bg-white text-slate-950 rounded-2xl font-black text-sm uppercase tracking-widest hover:bg-blue-50 transition-all active:scale-95 whitespace-nowrap shadow-xl">
+          <button 
+            onClick={() => setBookingSpecialist(Specialists[1])}
+            className="px-10 py-5 bg-white text-slate-950 rounded-2xl font-black text-sm uppercase tracking-widest hover:bg-blue-50 transition-all active:scale-95 whitespace-nowrap shadow-xl"
+          >
              Launch Rapid-Sync
           </button>
         </div>
@@ -145,7 +180,10 @@ export const SpecialistFinder: React.FC = () => {
               <button className="flex items-center justify-center gap-2 py-3 rounded-xl bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300 font-black text-[10px] uppercase tracking-widest hover:bg-slate-100 dark:hover:bg-slate-700 transition-all">
                 <MessageSquare size={14} /> Chat
               </button>
-              <button className="flex items-center justify-center gap-2 py-3 rounded-xl bg-blue-600 text-white font-black text-[10px] uppercase tracking-widest hover:bg-blue-700 transition-all shadow-lg shadow-blue-200 dark:shadow-blue-900/20">
+              <button 
+                onClick={() => setBookingSpecialist(specialist)}
+                className="flex items-center justify-center gap-2 py-3 rounded-xl bg-blue-600 text-white font-black text-[10px] uppercase tracking-widest hover:bg-blue-700 transition-all shadow-lg shadow-blue-200 dark:shadow-blue-900/20"
+              >
                 <Calendar size={14} /> Book
               </button>
             </div>

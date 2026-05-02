@@ -29,6 +29,7 @@ interface Message {
   text: string;
   timestamp: Date;
   isError?: boolean;
+  imageData?: string;
 }
 
 const PERSONAS = {
@@ -99,7 +100,7 @@ export function ChatInterface({ onMessageSent, isExploreView = false, user, forc
   const [isLoading, setIsLoading] = useState(false);
   const [activePersona, setActivePersona] = useState<keyof typeof PERSONAS>(forcedPersona || 'general');
   const [temperature, setTemperature] = useState(0.7);
-  const [activeModel, setActiveModel] = useState<'gemini-3-flash-preview' | 'gemini-3.1-pro-preview'>('gemini-3-flash-preview');
+  const [activeModel, setActiveModel] = useState<'gemini-1.5-flash' | 'gemini-1.5-pro'>('gemini-1.5-flash');
   const [showSettings, setShowSettings] = useState(false);
   const [isVoiceActive, setIsVoiceActive] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
@@ -329,9 +330,29 @@ export function ChatInterface({ onMessageSent, isExploreView = false, user, forc
     setTerminalLogs(prev => [...prev.slice(-3), 'SYS: report.md exported']);
   };
 
+  const [credits, setCredits] = useState<number | string>(user?.credits ?? 0);
+
+  useEffect(() => {
+    if (user?.credits !== undefined) {
+      setCredits(user.subscriptionTier === 'pro' || user.subscriptionTier === 'business' || user.subscriptionTier === 'gold' ? 'Unlimited' : user.credits);
+    }
+  }, [user]);
+
   const handleSend = async (customInput?: string) => {
     const textToSend = customInput || input;
     if (!textToSend.trim() || isLoading) return;
+
+    if (credits === 0 && user?.subscriptionTier === 'free') {
+      const errorMsg = "You have exhausted your free consultation credits. Please upgrade or purchase a credit bundle.";
+      setMessages(prev => [...prev, { 
+        id: 'error-' + Date.now(),
+        role: 'bot', 
+        text: errorMsg, 
+        isError: true,
+        timestamp: new Date() 
+      }]);
+      return;
+    }
 
     const userMessage: Message = {
       id: Date.now().toString(),
@@ -344,11 +365,10 @@ export function ChatInterface({ onMessageSent, isExploreView = false, user, forc
     setMessages(prev => [...prev, userMessage]);
     setTerminalLogs(prev => [...prev.slice(-3), `USER: ${textToSend.slice(0, 20)}...`]);
     setInput('');
-    setAttachedFiles([]); // Clear files after capturing them
+    setAttachedFiles([]); 
     setIsLoading(true);
     onMessageSent?.();
 
-    // Create placeholder bot message for streaming
     const botMessageId = (Date.now() + 1).toString();
     const botMessagePlaceholder: Message = {
       id: botMessageId,
@@ -359,7 +379,7 @@ export function ChatInterface({ onMessageSent, isExploreView = false, user, forc
     setMessages(prev => [...prev, botMessagePlaceholder]);
 
     try {
-      setTerminalLogs(prev => [...prev.slice(-3), 'AI: Establishing neural stream...']);
+      setTerminalLogs(prev => [...prev.slice(-3), 'AI: Syncing with Medical Node...']);
 
       const personaInstruction = PERSONAS[activePersona].instruction;
       const fileContext = filesToAttach.length > 0 
@@ -367,53 +387,31 @@ export function ChatInterface({ onMessageSent, isExploreView = false, user, forc
         : '';
       
       const systemInstruction = `${BASE_SYSTEM_INSTRUCTION}\n\nCURRENT SPECIALIZATION: ${personaInstruction}${fileContext}`;
-
-      const modelName = activeModel === 'gemini-3-flash-preview' ? 'gemini-3-flash-preview' : 'gemini-3.1-pro-preview';
-      
-      const stream = api.ai.geminiChatStream(
+      const result = await api.ai.geminiChat(
         [...messages, userMessage].map(m => ({
           role: m.role,
           text: m.text
         })),
         systemInstruction,
-        modelName,
+        activeModel,
         activePersona === 'support' ? 0.3 : temperature
       );
 
-      let fullText = '';
-      for await (const chunk of stream) {
-        fullText += chunk;
-        setMessages(prev => prev.map(m => 
-          m.id === botMessageId ? { ...m, text: fullText } : m
-        ));
+      setMessages(prev => prev.map(m => 
+        m.id === botMessageId ? { ...m, text: result.text, imageData: result.imageData } : m
+      ));
+
+      if (result.creditsRemaining !== undefined) {
+        setCredits(result.creditsRemaining);
       }
 
-      setTerminalLogs(prev => [...prev.slice(-3), 'AI: Diagnostics stream synchronized']);
-      
-      if (isVoiceActive) {
-        speak(fullText || "Diagnostic interrupted. Signal loss detected.");
-      }
+      setTerminalLogs(prev => [...prev.slice(-3), 'AI: Diagnostics synchronized']);
+      if (isVoiceActive) speak(result.text);
+
     } catch (error: any) {
       console.error('Chat error:', error);
       let errorMsg = "Cognis framework synchronization failure. Please establish a secondary baseline.";
-      
-      // Check for common error patterns
-      const rawError = typeof error === 'string' ? error : (error.message || String(error));
-      
-      if (rawError.includes("Invalid Gemini API Key") || rawError.includes("API key not valid")) {
-        errorMsg = "INVALID PERMANENT API KEY: The Gemini API key configured in the system is not valid. Please ensure you have inserted a valid key in the AI Studio Settings.";
-      } else if (rawError.includes("503") || rawError.includes("500")) {
-        errorMsg = "AI SERVICE OFFLINE: The Cognis Engine is temporarily unavailable. Check your network or API configuration.";
-      } else {
-        try {
-          const parsed = JSON.parse(rawError);
-          if (parsed.error) errorMsg = parsed.error;
-          if (parsed.details) errorMsg += ": " + parsed.details;
-        } catch (e) {
-          // Use the raw error if possible and helpful
-          if (rawError.length < 200) errorMsg = rawError;
-        }
-      }
+      if (error.message) errorMsg = error.message;
 
       setMessages(prev => {
         const filtered = prev.filter(m => m.id !== botMessageId);
@@ -546,9 +544,11 @@ export function ChatInterface({ onMessageSent, isExploreView = false, user, forc
               <h1 className="text-sm font-black text-slate-900 dark:text-white uppercase tracking-widest">
                 Doctorian <span className="text-blue-600 uppercase">Gemini</span>
               </h1>
-              <div className="hidden sm:flex items-center gap-1.5 px-2 py-1 bg-emerald-50 dark:bg-emerald-900/20 rounded-lg border border-emerald-100 dark:border-emerald-800 ml-2">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                <span className="text-[8px] font-black text-emerald-600 dark:text-emerald-400 uppercase tracking-widest">Live Sync</span>
+              <div className="hidden sm:flex items-center gap-1.5 px-2 py-1 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-100 dark:border-blue-800 ml-2">
+                <BrainCircuit size={10} className="text-blue-600" />
+                <span className="text-[8px] font-black text-blue-600 dark:text-blue-400 uppercase tracking-widest">
+                  {credits} Credits
+                </span>
               </div>
             </div>
           </div>
@@ -570,6 +570,17 @@ export function ChatInterface({ onMessageSent, isExploreView = false, user, forc
         {/* Message Stream */}
         <div ref={scrollRef} className="flex-1 overflow-y-auto scroll-smooth">
           <div className="max-w-4xl mx-auto px-6 py-12">
+            <div className="mb-12 p-6 bg-amber-50 dark:bg-amber-900/20 border border-amber-100 dark:border-amber-900/30 rounded-3xl">
+              <div className="flex items-start gap-4">
+                <AlertCircle size={20} className="text-amber-600 shrink-0 mt-0.5" />
+                <div>
+                  <h4 className="text-[10px] font-black text-amber-600 uppercase tracking-widest mb-1">Medical Trust & Disclaimer</h4>
+                  <p className="text-[10px] font-bold text-slate-600 dark:text-slate-400 leading-relaxed uppercase">
+                    I am an artificial intelligence, not a licensed medical professional. My responses are for informational purposes and should not be considered formal medical advice, diagnosis, or treatment. Always verify critical health data with a qualified clinician. In an emergency, dial 112 immediately.
+                  </p>
+                </div>
+              </div>
+            </div>
             <AnimatePresence initial={false}>
               {messages.length === 0 && !isLoading ? (
                 <motion.div 
@@ -617,6 +628,25 @@ export function ChatInterface({ onMessageSent, isExploreView = false, user, forc
                       </div>
                       
                       <div className={`flex flex-col space-y-2 max-w-[85%] ${msg.role === 'user' ? 'items-end' : 'items-start'}`}>
+                        {msg.imageData && (
+                          <div className="mb-4">
+                             <img 
+                              src={msg.imageData} 
+                              alt="Neural Visualization" 
+                              className="w-full max-w-sm rounded-[2rem] shadow-2xl border border-slate-100 dark:border-slate-800"
+                              referrerPolicy="no-referrer"
+                             />
+                             <div className="mt-2 flex justify-center">
+                               <a 
+                                href={msg.imageData} 
+                                download="doctorian-analysis.png"
+                                className="text-[9px] font-black uppercase text-blue-600 hover:underline flex items-center gap-1"
+                               >
+                                 <Download size={10} /> Export High-Res Analysis
+                               </a>
+                             </div>
+                          </div>
+                        )}
                         <div className={`prose prose-slate dark:prose-invert max-w-none text-base leading-relaxed ${
                           msg.role === 'user' 
                             ? 'bg-slate-100 dark:bg-slate-800 px-6 py-4 rounded-[2rem] rounded-tr-none shadow-sm' 
@@ -738,6 +768,15 @@ export function ChatInterface({ onMessageSent, isExploreView = false, user, forc
                         <Bot size={18} />
                       </div>
                       <div className="space-y-3 flex-1">
+                        <div className="flex items-center gap-3 mb-2">
+                           <div className="relative">
+                            <Loader2 size={16} className="animate-spin text-blue-600" />
+                            <div className="absolute inset-0 bg-blue-600/20 rounded-full animate-ping" />
+                           </div>
+                           <span className="text-[11px] font-[900] text-blue-600 uppercase tracking-[0.3em] animate-pulse">
+                             DOCTORIAN AI THINKING
+                           </span>
+                        </div>
                         <div className="h-4 bg-slate-100 dark:bg-slate-800 rounded-lg animate-pulse w-full max-w-md"></div>
                         <div className="h-4 bg-slate-100 dark:bg-slate-800 rounded-lg animate-pulse w-1/2"></div>
                       </div>

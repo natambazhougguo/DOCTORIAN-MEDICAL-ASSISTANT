@@ -5,10 +5,11 @@ import {
   CheckCircle2, XCircle, Info, User, Hash,
   ClipboardList, Beaker, Stethoscope, ChevronUp,
   Sparkles, Shield, Heart, Activity, Eye, EyeOff, Share2,
-  Scale, Loader2, Wind, Zap, Brain, Droplets, Thermometer
+  Scale, Loader2, Wind, Zap, Brain, Droplets, Thermometer, RefreshCw, X, MessageSquare
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { api } from '../api';
+import { NeuralHealthSummary } from './NeuralHealthSummary';
 
 // ─── Types ────────────────────────────────────────────────
 interface Medication {
@@ -288,6 +289,7 @@ export const HealthRecords: React.FC = () => {
   const [isSaving, setIsSaving] = useState(false);
   const [toasts, setToasts] = useState<Toast[]>([]);
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [showNeuralSummary, setShowNeuralSummary] = useState(false);
 
   // Filter States
   const [filterPatientName, setFilterPatientName] = useState('');
@@ -524,6 +526,34 @@ export const HealthRecords: React.FC = () => {
     <main className="max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-12 relative z-10">
       <ToastContainer toasts={toasts} onDismiss={id => setToasts(prev => prev.filter(t => t.id !== id))} />
 
+      {/* Neural Summary Modal */}
+      <AnimatePresence>
+        {showNeuralSummary && (
+          <div className="fixed inset-0 z-[110] flex items-center justify-center p-4">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setShowNeuralSummary(false)}
+              className="absolute inset-0 bg-slate-950/80 backdrop-blur-sm"
+            />
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              className="relative w-full max-w-4xl max-h-[90vh] overflow-hidden"
+            >
+              <NeuralHealthSummary 
+                vitals={null} 
+                history={[]} 
+                records={savedPrescriptions}
+                onClose={() => setShowNeuralSummary(false)} 
+              />
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
       {/* ── Header ────────────────────────────────────── */}
       <header className="mb-8">
         <div className="flex items-start sm:items-center gap-4 mb-1">
@@ -541,6 +571,13 @@ export const HealthRecords: React.FC = () => {
             <p className="text-slate-400 dark:text-slate-500 text-sm mt-0.5">Comprehensive medical history and prescription tracking</p>
           </div>
           <div className="hidden lg:flex items-center gap-3">
+            <button 
+              onClick={() => setShowNeuralSummary(true)}
+              className="flex items-center gap-2 bg-blue-600 text-white px-5 py-3 rounded-2xl font-black text-[11px] uppercase tracking-widest shadow-lg shadow-blue-500/20 hover:bg-blue-700 transition-all active:scale-95"
+            >
+              <Brain size={16} />
+              Neural History Review
+            </button>
             <div className="text-center px-5 py-3 bg-white dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800 shadow-sm" role="status" aria-label={`${savedPrescriptions.length} Total Records`}>
               <p className="text-2xl font-black text-slate-800 dark:text-slate-200">{savedPrescriptions.length}</p>
               <p className="text-[11px] text-slate-400 dark:text-slate-500 uppercase tracking-wider font-bold">Total Records</p>
@@ -981,7 +1018,7 @@ export const HealthRecords: React.FC = () => {
               <h3 id="filters-title" className="text-sm font-black text-slate-900 dark:text-white uppercase tracking-widest">Filter Records</h3>
             </div>
             
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
               <InputField 
                 label="Patient Name" 
                 value={filterPatientName} 
@@ -1005,35 +1042,37 @@ export const HealthRecords: React.FC = () => {
                 options={ALL_CATEGORIES} 
               />
               
-              <div className="grid grid-cols-2 gap-2">
-                <InputField 
-                  label="From Date" 
-                  value={filterStartDate} 
-                  onChange={setFilterStartDate} 
-                  type="date" 
-                />
-                
-                <InputField 
-                  label="To Date" 
-                  value={filterEndDate} 
-                  onChange={setFilterEndDate} 
-                  type="date" 
-                />
-              </div>
+              <InputField 
+                label="From Date" 
+                value={filterStartDate} 
+                onChange={setFilterStartDate} 
+                type="date" 
+              />
+              
+              <InputField 
+                label="To Date" 
+                value={filterEndDate} 
+                onChange={setFilterEndDate} 
+                type="date" 
+              />
             </div>
             
-            {(filterPatientName || filterMedType !== 'All Types' || filterStartDate || filterEndDate) && (
-              <div className="mt-4 flex justify-end">
+            {(filterPatientName || filterMedName || filterMedType !== 'All Types' || filterStartDate || filterEndDate) && (
+              <div className="mt-4 flex items-center justify-between">
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                  Showing {filteredPrescriptions.length} matched records
+                </p>
                 <button 
                   onClick={() => {
                     setFilterPatientName('');
+                    setFilterMedName('');
                     setFilterMedType('All Types');
                     setFilterStartDate('');
                     setFilterEndDate('');
                   }}
-                  className="text-[10px] font-black text-blue-600 dark:text-blue-400 uppercase tracking-widest hover:text-blue-700 dark:hover:text-blue-300 transition-colors"
+                  className="px-4 py-2 bg-slate-100 dark:bg-slate-800 rounded-xl text-[10px] font-black text-slate-600 dark:text-slate-400 uppercase tracking-widest hover:bg-slate-200 dark:hover:bg-slate-700 transition-all flex items-center gap-2"
                 >
-                  Clear All Filters
+                  <RefreshCw size={12} /> Clear All Filters
                 </button>
               </div>
             )}

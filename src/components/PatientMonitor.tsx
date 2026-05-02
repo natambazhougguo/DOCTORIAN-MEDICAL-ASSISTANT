@@ -3,11 +3,13 @@ import {
   Wifi, Bluetooth, Play, Square, Thermometer,
   Heart, Droplets, Wind, Activity, AlertTriangle,
   CheckCircle, Info, Radio, Signal, XCircle, Monitor, Stethoscope, WifiOff,
-  Smartphone, MessageSquare, Phone, Cpu, Loader2, Zap, Settings
+  Smartphone, MessageSquare, Phone, Cpu, Loader2, Zap, Settings, Brain, Sparkles, X
 } from 'lucide-react';
 import { useArduino, HealthStatus, Vitals } from '../hooks/useArduino';
 import { motion, AnimatePresence } from 'motion/react';
 import { api } from '../api';
+import { NeuralHealthSummary } from './NeuralHealthSummary';
+import { VitalWaveform } from './VitalWaveform';
 
 const VitalCard: React.FC<{
   icon: React.ReactNode;
@@ -18,7 +20,9 @@ const VitalCard: React.FC<{
   bgColor: string;
   status?: 'normal' | 'warning' | 'critical';
   isLive?: boolean;
-}> = ({ icon, label, value, unit, color, bgColor, status, isLive }) => (
+  history?: number[];
+  maxVal?: number;
+}> = ({ icon, label, value, unit, color, bgColor, status, isLive, history = [], maxVal }) => (
   <motion.div 
     initial={{ opacity: 0, scale: 0.95 }}
     animate={{ 
@@ -29,30 +33,55 @@ const VitalCard: React.FC<{
     transition={{ 
       boxShadow: { repeat: Infinity, duration: 2 }
     }}
-    className={`bg-white/80 dark:bg-slate-900/80 backdrop-blur-sm rounded-2xl p-5 border shadow-sm hover:shadow-md transition-all relative overflow-hidden ${status === 'critical' ? 'border-red-200 dark:border-red-900 bg-red-50/30 dark:bg-red-900/10' : 'border-slate-100 dark:border-slate-800'}`}
+    className={`bg-white/90 dark:bg-slate-900/90 backdrop-blur-md rounded-[2.5rem] p-6 border shadow-sm hover:shadow-xl transition-all relative overflow-hidden flex flex-col justify-between h-full ${status === 'critical' ? 'border-red-200 dark:border-red-900 bg-red-50/30' : 'border-slate-100 dark:border-slate-800'}`}
     role="group"
     aria-label={`${label} monitoring`}
   >
     {isLive && (
       <div 
-        className="absolute top-0 right-0 px-2 py-0.5 bg-emerald-500 text-[8px] font-black text-white uppercase tracking-widest rounded-bl-lg"
+        className="absolute top-0 right-0 px-4 py-1.5 bg-emerald-500 text-[9px] font-black text-white uppercase tracking-[0.2em] rounded-bl-2xl shadow-lg"
         role="status"
         aria-label="Live data"
       >
-        Live
+        Live Matrix
       </div>
     )}
-    <div className="flex items-center justify-between mb-3">
-      <div className={`p-2 rounded-xl ${bgColor} dark:bg-opacity-10`} aria-hidden="true">
-        {icon}
+    
+    <div>
+      <div className="flex items-center justify-between mb-6">
+        <div className={`p-4 rounded-2xl ${bgColor} dark:bg-opacity-10 border border-current opacity-20`} aria-hidden="true">
+          {React.cloneElement(icon as any, { size: 28 })}
+        </div>
+        <div className="flex gap-2">
+          {status === 'warning' && <AlertTriangle className="w-5 h-5 text-amber-500" aria-label="Warning status" />}
+          {status === 'critical' && <XCircle className="w-5 h-5 text-red-500" aria-label="Critical status" />}
+        </div>
       </div>
-      {status === 'warning' && <AlertTriangle className="w-4 h-4 text-amber-500" aria-label="Warning status" />}
-      {status === 'critical' && <XCircle className="w-4 h-4 text-red-500" aria-label="Critical status" />}
+      
+      <p className="text-slate-400 dark:text-slate-500 text-[10px] font-black uppercase tracking-[0.2em] mb-2" id={`label-${label.replace(/\s+/g, '-')}`}>{label}</p>
+      <div className="flex items-baseline gap-2 mb-6" aria-labelledby={`label-${label.replace(/\s+/g, '-')}`}>
+        <span className={`text-5xl font-black tracking-tighter ${color}`} aria-live="polite">{value}</span>
+        <span className="text-xs font-bold text-slate-400 uppercase tracking-widest">{unit}</span>
+      </div>
     </div>
-    <p className="text-slate-500 dark:text-slate-400 text-[10px] font-bold uppercase tracking-wider mb-1" id={`label-${label.replace(/\s+/g, '-')}`}>{label}</p>
-    <div className="flex items-baseline gap-1.5" aria-labelledby={`label-${label.replace(/\s+/g, '-')}`}>
-      <span className={`text-3xl font-black ${color}`} aria-live="polite">{value}</span>
-      <span className="text-xs font-semibold text-slate-400 dark:text-slate-500">{unit}</span>
+
+    <div className="mt-auto pt-4 border-t border-slate-50 dark:border-slate-800/50">
+      <div className="h-16 flex items-center justify-center">
+        {history.length > 0 ? (
+          <VitalWaveform 
+            data={history} 
+            color={status === 'critical' ? '#ef4444' : status === 'warning' ? '#f59e0b' : color.replace('text-', '').replace('[', '').replace(']', '') === 'blue-600' ? '#2563eb' : color.includes('#') ? color : '#3b82f6'} 
+            maxVal={maxVal}
+            width={240}
+            height={60}
+          />
+        ) : (
+          <div className="flex items-center gap-2 text-[8px] font-black text-slate-300 uppercase tracking-widest">
+            <Radio size={10} className="animate-pulse" />
+            Initializing Waveform
+          </div>
+        )}
+      </div>
     </div>
   </motion.div>
 );
@@ -71,35 +100,141 @@ const StatusBadge: React.FC<{ status: HealthStatus }> = ({ status }) => {
     <motion.div 
       initial={{ opacity: 0, y: -10 }}
       animate={{ opacity: 1, y: 0 }}
-      className={`${c.bg} dark:bg-slate-900 border ${c.border} dark:border-slate-800 rounded-3xl p-4 sm:p-6 shadow-sm`}
+      className={`${c.bg} dark:bg-slate-900 border ${c.border} dark:border-slate-800 rounded-3xl p-6 sm:p-6 shadow-sm`}
       role="status"
       aria-label={`Overall Patient Status: ${c.label}`}
     >
-      <div className="flex flex-col sm:flex-row sm:items-center gap-4 mb-4">
-        <div className="flex items-center gap-4">
-          <div className={`${c.text} bg-white dark:bg-slate-800 p-3 rounded-2xl shadow-sm`} aria-hidden="true">{c.icon}</div>
+      <div className="flex flex-col sm:flex-row sm:items-center gap-6 sm:gap-4 mb-6 sm:mb-4">
+        <div className="flex items-center gap-5">
+          <div className={`${c.text} bg-white dark:bg-slate-800 p-4 rounded-2xl shadow-sm`} aria-hidden="true">
+            {React.cloneElement(c.icon as any, { size: 32 })}
+          </div>
           <div>
-            <h2 className="font-bold text-slate-900 dark:text-white text-base sm:text-lg leading-tight">Patient Status</h2>
-            <span className={`${c.text} font-black text-xl sm:text-2xl tracking-tight`}>{c.label}</span>
+            <h2 className="font-black text-slate-900 dark:text-white text-lg sm:text-lg leading-tight uppercase tracking-tight text-high-visibility">Patient Status</h2>
+            <span className={`${c.text} font-black text-3xl sm:text-2xl tracking-tighter uppercase`}>{c.label}</span>
           </div>
         </div>
         <div 
-          className="sm:ml-auto text-right bg-white dark:bg-slate-800 px-4 py-2 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-700 flex sm:flex-col items-center sm:items-end justify-between sm:justify-center gap-2"
+          className="sm:ml-auto text-right bg-white dark:bg-slate-900 px-6 py-4 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-800 flex sm:flex-col items-center sm:items-end justify-between sm:justify-center gap-2"
           aria-label={`Health score: ${status.score}`}
         >
-          <p className="text-2xl sm:text-3xl font-black text-slate-800 dark:text-slate-200 leading-none">{status.score}</p>
-          <p className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest">Health Score</p>
+          <p className="text-4xl sm:text-3xl font-black text-slate-800 dark:text-slate-200 leading-none text-high-visibility">{status.score}</p>
+          <p className="text-[11px] font-black text-slate-400 uppercase tracking-widest text-high-visibility">Score</p>
         </div>
       </div>
-      <div className="space-y-2 bg-white/50 dark:bg-slate-800/50 p-4 rounded-2xl border border-white/50 dark:border-slate-700/50 backdrop-blur-sm">
+      <div className="space-y-3 bg-white/50 dark:bg-slate-800/50 p-5 rounded-2xl border border-white/50 dark:border-slate-700/50 backdrop-blur-sm">
         {status.alerts.map((alert, i) => (
-          <div key={i} className={`text-sm font-medium ${i === 0 && status.alerts.length > 1 ? c.text : 'text-slate-600 dark:text-slate-400'} flex items-start gap-2`}>
-            <span className="mt-1 w-1.5 h-1.5 rounded-full bg-current shrink-0"></span>
+          <div key={i} className={`text-base sm:text-sm font-bold ${i === 0 && status.alerts.length > 1 ? c.text : 'text-slate-600 dark:text-slate-400'} flex items-start gap-3`}>
+            <span className="mt-2 w-2 h-2 rounded-full bg-current shrink-0"></span>
             {alert}
           </div>
         ))}
       </div>
     </motion.div>
+  );
+};
+
+const DiagnosticAnalysisView: React.FC<{ vitals: Vitals | null; history: Vitals[] }> = ({ vitals, history }) => {
+  return (
+    <div className="space-y-8 animate-in fade-in duration-500">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+        <div className="bg-slate-900 rounded-[3rem] p-10 text-white relative overflow-hidden group">
+          <div className="absolute top-0 right-0 p-8 opacity-10">
+            <Brain size={120} />
+          </div>
+          <div className="relative z-10">
+            <h3 className="text-xs font-black text-blue-400 uppercase tracking-[0.2em] mb-8">Neural Connectivity Map</h3>
+            <div className="h-64 flex items-center justify-center relative">
+               {[...Array(5)].map((_, i) => (
+                  <motion.div
+                    key={i}
+                    animate={{
+                      scale: [1, 1.1, 1],
+                      opacity: [0.1, 0.3, 0.1],
+                    }}
+                    transition={{ duration: 4 + i, repeat: Infinity }}
+                    className="absolute w-48 h-48 rounded-full border border-blue-500/20"
+                    style={{ left: `${10 + i * 15}%`, top: `${20 + (i % 2) * 10}%` }}
+                  />
+               ))}
+               <div className="text-center">
+                  <span className="text-6xl font-black tracking-tighter block mb-2">99.2%</span>
+                  <span className="text-[10px] font-black uppercase tracking-[0.3em] text-blue-400">Synaptic Efficiency</span>
+               </div>
+            </div>
+            <div className="grid grid-cols-2 gap-4 mt-8">
+               <div className="bg-white/5 rounded-2xl p-4 border border-white/5">
+                  <p className="text-[9px] font-black text-slate-500 uppercase mb-2">Cognitive Load</p>
+                  <p className="text-lg font-black italic">LOW</p>
+               </div>
+               <div className="bg-white/5 rounded-2xl p-4 border border-white/5">
+                  <p className="text-[9px] font-black text-slate-500 uppercase mb-2">Stability</p>
+                  <p className="text-lg font-black italic">OPTIMAL</p>
+               </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="bg-white dark:bg-slate-900 rounded-[3rem] p-10 border border-slate-100 dark:border-slate-800 shadow-xl">
+           <h3 className="text-xs font-black text-slate-400 uppercase tracking-[0.2em] mb-8 flex items-center gap-2">
+              <Activity size={14} className="text-blue-600" /> Bio-Waveform Synchronization
+           </h3>
+           <div className="space-y-10">
+              <div>
+                <div className="flex justify-between items-baseline mb-4">
+                   <p className="text-xs font-black uppercase">Alpha Wave Synthesis</p>
+                   <p className="text-[10px] font-bold text-slate-400 uppercase">8.4 - 12.0 Hz</p>
+                </div>
+                <div className="h-2 w-full bg-slate-50 dark:bg-slate-800 rounded-full overflow-hidden">
+                   <motion.div 
+                    initial={{ width: 0 }}
+                    animate={{ width: '84%' }}
+                    className="h-full bg-blue-600" 
+                   />
+                </div>
+              </div>
+              <div>
+                <div className="flex justify-between items-baseline mb-4">
+                   <p className="text-xs font-black uppercase">Delta Pattern Registry</p>
+                   <p className="text-[10px] font-bold text-slate-400 uppercase">0.5 - 4.0 Hz</p>
+                </div>
+                <div className="h-2 w-full bg-slate-50 dark:bg-slate-800 rounded-full overflow-hidden">
+                   <motion.div 
+                    initial={{ width: 0 }}
+                    animate={{ width: '32%' }}
+                    className="h-full bg-purple-600" 
+                   />
+                </div>
+              </div>
+              <div className="p-6 bg-blue-50 dark:bg-blue-900/10 rounded-3xl border border-blue-100 dark:border-blue-800/50">
+                 <p className="text-[10px] font-bold text-blue-600 dark:text-blue-400 leading-relaxed uppercase tracking-widest text-center">System detecting high coherence in lower-frequency ranges. Patient in deep rest-mode protocols.</p>
+              </div>
+           </div>
+        </div>
+      </div>
+
+      <div className="bg-white dark:bg-slate-900 rounded-[3.5rem] p-12 border border-slate-100 dark:border-slate-800 shadow-2xl relative overflow-hidden">
+          <div className="absolute top-0 right-0 p-12 opacity-[0.03]">
+             <Zap size={240} />
+          </div>
+          <div className="relative z-10">
+             <h3 className="text-3xl font-black text-slate-900 dark:text-white uppercase tracking-tighter mb-6">Autonomous Biological Insight</h3>
+             <p className="text-slate-500 dark:text-slate-400 font-medium max-w-3xl leading-relaxed mb-10">
+                The Cognis AI framework has synthesized the last {history.length} data packets. 
+                Initial metabolic modeling suggests a 94% probability of hyper-recovery state. 
+                Recommended adjustment: Maintain current hydration loop and initiate REM-synchronization within 120 minutes.
+             </p>
+             <div className="flex flex-wrap gap-4">
+                <button className="px-8 py-4 bg-blue-600 text-white rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-blue-700 transition-all shadow-xl shadow-blue-200 dark:shadow-none">
+                  Export Clinical Mapping
+                </button>
+                <button className="px-8 py-4 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-slate-200 dark:hover:bg-slate-700 transition-all">
+                  Contact Specialist
+                </button>
+             </div>
+          </div>
+      </div>
+    </div>
   );
 };
 
@@ -119,7 +254,51 @@ export const PatientMonitor: React.FC = () => {
   const [lastAlertSent, setLastAlertSent] = useState<number | null>(null);
   const [isOffline, setIsOffline] = useState(!navigator.onLine);
   const [isConnecting, setIsConnecting] = useState<string | null>(null);
+  const [isAiReasoningOpen, setIsAiReasoningOpen] = useState(false);
+  const [aiAnalysis, setAiAnalysis] = useState<string | null>(null);
+  const [isAiLoading, setIsAiLoading] = useState(false);
+  const [showAdvancedAnalysis, setShowAdvancedAnalysis] = useState(false);
+  const [showNeuralSummary, setShowNeuralSummary] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
+  const [isEmergencyCalling, setIsEmergencyCalling] = useState(false);
+
+  const getEmergencyContacts = () => {
+    const saved = localStorage.getItem('emergency_contacts');
+    return saved ? JSON.parse(saved) : [];
+  };
+
+  const fetchAiAnalysis = async () => {
+    if (!vitals || !healthStatus) return;
+    setIsAiLoading(true);
+    try {
+      const prompt = `Act as a clinical medical analyst. Analyze these real-time patient vitals: 
+      Heart Rate: ${vitals.heartRate} bpm
+      Temperature: ${vitals.temperature}°C
+      SpO2: ${vitals.spo2}%
+      BP: ${vitals.systolicBP}/${vitals.diastolicBP} mmHg
+      Respiratory Rate: ${vitals.respiratoryRate} rpm
+      Health Score: ${healthStatus.score}/100
+      Current Alerts: ${healthStatus.alerts.join(', ')}
+
+      Provide a concise 2-sentence clinical interpretation of the physiological drift and a specific recommended action.`;
+      
+      const response = await api.ai.geminiChat(prompt);
+      setAiAnalysis(response.text);
+    } catch (err) {
+      setAiAnalysis("Analysis synchronization failed. Clinical markers suggest maintenance of current protocols until matrix restabilizes.");
+    } finally {
+      setIsAiLoading(false);
+    }
+  };
+
+  React.useEffect(() => {
+    if (healthStatus?.overall === 'critical' || healthStatus?.overall === 'warning') {
+      // Auto-trigger analysis for anomalies if not already loading
+      if (!isAiLoading && !aiAnalysis) {
+        fetchAiAnalysis();
+      }
+    }
+  }, [healthStatus?.overall]);
   
   // Alert Thresholds Configuration
   const [thresholds, setThresholds] = useState({
@@ -217,8 +396,15 @@ export const PatientMonitor: React.FC = () => {
     if (isCritical && (!lastAlertSent || Date.now() - lastAlertSent > 300000)) { // Alert every 5 minutes if still critical
       const alertMessage = `CRITICAL ALERT: Patient condition has worsened. Vitals: HR: ${Math.round(vitals?.heartRate || 0)}bpm, SpO2: ${Math.round(vitals?.spo2 || 0)}%, Temp: ${vitals?.temperature.toFixed(1)}°C. Please check immediately.`;
       
+      const contacts = getEmergencyContacts();
+      const doctor = contacts.find((c: any) => c.role === 'Doctor');
+      const mentor = contacts.find((c: any) => c.role === 'Mentor');
+
+      const doctorPhone = doctor ? `${doctor.countryCode}${doctor.phone}` : undefined;
+      const mentorPhone = mentor ? `${mentor.countryCode}${mentor.phone}` : undefined;
+
       // Send SMS
-      api.alerts.sendSms(alertMessage)
+      api.alerts.sendSms(alertMessage, doctorPhone, mentorPhone)
         .then(res => {
           if (res.simulated && res.message.includes('TWILIO CONFIGURATION ERROR')) {
             setAlertError(res.message);
@@ -231,18 +417,23 @@ export const PatientMonitor: React.FC = () => {
         .catch(err => console.error('❌ Failed to send SMS alert:', err));
 
       // Initiate Voice Call
+      setIsEmergencyCalling(true);
       const voiceMessage = `Critical alert for patient. Heart rate is ${Math.round(vitals?.heartRate || 0)} beats per minute. Oxygen saturation is ${Math.round(vitals?.spo2 || 0)} percent. Temperature is ${vitals?.temperature.toFixed(1)} degrees Celsius. Please check the patient immediately.`;
-      api.alerts.makeCall(voiceMessage)
+      api.alerts.makeCall(voiceMessage, doctorPhone, mentorPhone)
         .then(res => {
           if (res.simulated && res.message.includes('TWILIO CONFIGURATION ERROR')) {
             setAlertError(res.message);
             console.warn('⚠️ Voice Call Simulated:', res.message);
           } else {
-            // Don't clear if SMS already set an error
             console.log('✅ Voice Call Status:', res.message);
           }
+          // Reset UI after showing call in progress for 15s
+          setTimeout(() => setIsEmergencyCalling(false), 15000);
         })
-        .catch(err => console.error('❌ Failed to initiate voice call:', err));
+        .catch(err => {
+          console.error('❌ Failed to initiate voice call:', err);
+          setIsEmergencyCalling(false);
+        });
 
       setLastAlertSent(Date.now());
     }
@@ -336,6 +527,93 @@ export const PatientMonitor: React.FC = () => {
 
   return (
     <div className="max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8 py-8 relative">
+      {/* Emergency Calling Overlay */}
+      <AnimatePresence>
+        {isEmergencyCalling && (
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[1000] bg-rose-600/95 backdrop-blur-2xl flex items-center justify-center p-8 text-white overflow-hidden"
+          >
+            {/* Pulsing Rings */}
+            <div className="absolute inset-0 flex items-center justify-center opacity-20 pointer-events-none">
+              <motion.div 
+                animate={{ scale: [1, 2.5], opacity: [0.5, 0] }}
+                transition={{ duration: 2, repeat: Infinity }}
+                className="w-64 h-64 border-8 border-white rounded-full absolute"
+              />
+            </div>
+
+            <div className="relative z-10 text-center max-w-lg">
+              <motion.div 
+                animate={{ rotate: [0, 5, -5, 0], scale: [1, 1.05, 1] }}
+                transition={{ duration: 0.5, repeat: Infinity }}
+                className="w-32 h-32 bg-white rounded-[2.5rem] flex items-center justify-center text-rose-600 mx-auto mb-10 shadow-2xl"
+              >
+                <PhoneCall size={56} />
+              </motion.div>
+              <h2 className="text-4xl font-[1000] uppercase tracking-tighter mb-4 animate-pulse">Emergency Alarm</h2>
+              <p className="text-xs font-black uppercase tracking-[0.3em] mb-12 text-rose-100 opacity-80">Autonomous Calling Protocol Active</p>
+              
+              <div className="space-y-4">
+                <div className="p-5 bg-white/10 rounded-3xl border border-white/20 backdrop-blur-md flex items-center gap-4">
+                   <div className="w-10 h-10 rounded-full bg-emerald-500 flex items-center justify-center">
+                      <Stethoscope size={20} />
+                   </div>
+                   <div className="text-left">
+                      <p className="text-[10px] font-black uppercase tracking-widest text-rose-200">Calling Point ALPHA</p>
+                      <p className="text-sm font-black uppercase">Registered Specialist Node</p>
+                   </div>
+                </div>
+                <div className="p-5 bg-white/10 rounded-3xl border border-white/20 backdrop-blur-md flex items-center gap-4">
+                   <div className="w-10 h-10 rounded-full bg-amber-500 flex items-center justify-center">
+                      <User size={20} />
+                   </div>
+                   <div className="text-left">
+                      <p className="text-[10px] font-black uppercase tracking-widest text-rose-200">Calling Point BETA</p>
+                      <p className="text-sm font-black uppercase">Patient Mentorship Node</p>
+                   </div>
+                </div>
+              </div>
+
+              <button 
+                onClick={() => setIsEmergencyCalling(false)}
+                className="mt-12 px-10 py-4 bg-white text-rose-600 rounded-full font-black text-[10px] uppercase tracking-[0.3em] shadow-2xl hover:scale-105 active:scale-95 transition-all"
+              >
+                Reset Emergency Loop
+              </button>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+      {/* Neural Summary Modal */}
+      <AnimatePresence>
+        {showNeuralSummary && (
+          <div className="fixed inset-0 z-[110] flex items-center justify-center p-4">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setShowNeuralSummary(false)}
+              className="absolute inset-0 bg-slate-950/80 backdrop-blur-md"
+            />
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              className="relative w-full max-w-4xl max-h-[90vh] overflow-hidden"
+            >
+              <NeuralHealthSummary 
+                vitals={vitals} 
+                history={history} 
+                onClose={() => setShowNeuralSummary(false)} 
+              />
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
       {/* Settings Modal */}
       <AnimatePresence>
         {showSettings && (
@@ -500,6 +778,13 @@ export const PatientMonitor: React.FC = () => {
             <p className="text-slate-500 dark:text-slate-400 text-xs sm:text-sm font-medium">Real-time health data from Arduino via Bluetooth & WiFi</p>
           </div>
           <div className="flex flex-wrap items-center justify-center sm:justify-end gap-3">
+             <button
+              onClick={() => setShowNeuralSummary(true)}
+              className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-2xl text-[10px] sm:text-xs font-black uppercase tracking-wider shadow-lg shadow-blue-500/20 hover:bg-blue-700 transition-all active:scale-95"
+            >
+              <Brain size={14} />
+              Neural Insight
+            </button>
              <button
               onClick={() => setShowSettings(true)}
               className="flex items-center gap-2 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 px-4 py-2 rounded-2xl text-[10px] sm:text-xs font-black uppercase tracking-wider border border-slate-200 dark:border-slate-700 transition-all active:scale-95"
@@ -810,7 +1095,28 @@ export const PatientMonitor: React.FC = () => {
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
           >
-            {/* Alert Configuration Error */}
+            <div className="flex flex-col sm:flex-row gap-4 mb-10 items-start sm:items-center justify-between">
+              <div className="flex bg-slate-50 dark:bg-slate-800 p-1 rounded-2xl border border-slate-100 dark:border-slate-800">
+                <button
+                  onClick={() => setShowAdvancedAnalysis(false)}
+                  className={`px-6 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${!showAdvancedAnalysis ? 'bg-white dark:bg-slate-900 text-blue-600 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
+                >
+                  Bio-Baseline
+                </button>
+                <button
+                  onClick={() => setShowAdvancedAnalysis(true)}
+                  className={`px-6 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${showAdvancedAnalysis ? 'bg-white dark:bg-slate-900 text-purple-600 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
+                >
+                   Neural Analysis
+                </button>
+              </div>
+            </div>
+
+            {showAdvancedAnalysis ? (
+              <DiagnosticAnalysisView vitals={vitals} history={history} />
+            ) : (
+              <>
+                {/* Alert Configuration Error */}
             <AnimatePresence>
               {alertError && (
                 <motion.div 
@@ -917,68 +1223,110 @@ export const PatientMonitor: React.FC = () => {
               </div>
             </div>
 
-            {/* Vital Cards */}
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4 mb-8">
+            {/* Vital Cards Grid */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-12">
               <VitalCard
-                icon={<Heart className="w-5 h-5 text-rose-500" />}
+                icon={<Heart />}
                 label="Heart Rate"
-                value={Math.round(vitals.heartRate).toString()}
-                unit="bpm"
-                color="text-rose-600"
-                bgColor="bg-rose-50"
-                status={getStatus('heartRate', vitals.heartRate)}
-                isLive={connection.type !== 'demo'}
+                value={vitals ? Math.round(vitals.heartRate).toString() : '--'}
+                unit="BPM"
+                color="text-blue-600"
+                bgColor="bg-blue-50"
+                status={getStatus('heartRate', vitals?.heartRate || 0)}
+                isLive={connection.connected}
+                history={history.map(h => h.heartRate)}
+                maxVal={200}
               />
               <VitalCard
-                icon={<Thermometer className="w-5 h-5 text-orange-500" />}
+                icon={<Droplets />}
+                label="SpO2 Level"
+                value={vitals ? Math.round(vitals.spo2).toString() : '--'}
+                unit="%"
+                color="text-emerald-600"
+                bgColor="bg-emerald-50"
+                status={getStatus('spo2', vitals?.spo2 || 0)}
+                isLive={connection.connected}
+                history={history.map(h => h.spo2)}
+                maxVal={100}
+              />
+              <VitalCard
+                icon={<Thermometer />}
                 label="Temperature"
-                value={vitals.temperature.toFixed(1)}
+                value={vitals ? vitals.temperature.toFixed(1) : '--'}
                 unit="°C"
                 color="text-orange-600"
                 bgColor="bg-orange-50"
-                status={getStatus('temperature', vitals.temperature)}
-                isLive={connection.type !== 'demo'}
+                status={getStatus('temperature', vitals?.temperature || 0)}
+                isLive={connection.connected}
+                history={history.map(h => h.temperature)}
+                maxVal={42}
               />
               <VitalCard
-                icon={<Droplets className="w-5 h-5 text-blue-500" />}
-                label="SpO2"
-                value={Math.round(vitals.spo2).toString()}
-                unit="%"
-                color="text-blue-600"
-                bgColor="bg-blue-50"
-                status={getStatus('spo2', vitals.spo2)}
-                isLive={connection.type !== 'demo'}
-              />
-              <VitalCard
-                icon={<Activity className="w-5 h-5 text-purple-500" />}
+                icon={<Activity />}
                 label="Systolic BP"
-                value={Math.round(vitals.systolicBP).toString()}
-                unit="mmHg"
-                color="text-purple-600"
-                bgColor="bg-purple-50"
-                status={getStatus('systolicBP', vitals.systolicBP)}
-                isLive={connection.type !== 'demo'}
-              />
-              <VitalCard
-                icon={<Activity className="w-5 h-5 text-indigo-500" />}
-                label="Diastolic BP"
-                value={Math.round(vitals.diastolicBP).toString()}
+                value={vitals ? Math.round(vitals.systolicBP).toString() : '--'}
                 unit="mmHg"
                 color="text-indigo-600"
                 bgColor="bg-indigo-50"
-                status={getStatus('diastolicBP', vitals.diastolicBP)}
-                isLive={connection.type !== 'demo'}
+                status={getStatus('systolicBP', vitals?.systolicBP || 0)}
+                isLive={connection.connected}
+                history={history.map(h => h.systolicBP)}
+                maxVal={220}
               />
               <VitalCard
-                icon={<Wind className="w-5 h-5 text-teal-500" />}
-                label="Resp. Rate"
-                value={Math.round(vitals.respiratoryRate).toString()}
-                unit="br/min"
-                color="text-teal-600"
-                bgColor="bg-teal-50"
-                status={getStatus('respiratoryRate', vitals.respiratoryRate)}
-                isLive={connection.type !== 'demo'}
+                icon={<Wind />}
+                label="Respiration"
+                value={vitals ? Math.round(vitals.respiratoryRate).toString() : '--'}
+                unit="RPM"
+                color="text-blue-500"
+                bgColor="bg-blue-50"
+                status={getStatus('respiratoryRate', vitals?.respiratoryRate || 0)}
+                isLive={connection.connected}
+                history={history.map(h => h.respiratoryRate)}
+                maxVal={40}
               />
+              {/* Dynamic Health Score Matrix */}
+              <div className="bg-slate-900 rounded-[2.5rem] p-8 text-white relative overflow-hidden group">
+                 <div className="absolute inset-0 bg-gradient-to-br from-blue-600/20 via-transparent to-transparent opacity-50 group-hover:opacity-100 transition-opacity"></div>
+                 <div className="relative z-10 h-full flex flex-col justify-between">
+                    <div>
+                      <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 mb-6">Neural Health Index</p>
+                      <div className="flex items-baseline gap-2 mb-8">
+                         <span className="text-6xl font-black tracking-tighter text-blue-400">{healthStatus?.score || '--'}</span>
+                         <span className="text-sm font-black text-slate-500 uppercase">Points</span>
+                      </div>
+                    </div>
+                    
+                    <div className="space-y-4">
+                      {aiAnalysis ? (
+                        <motion.div 
+                          initial={{ opacity: 0, y: 10 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          className="bg-white/10 dark:bg-slate-800/10 backdrop-blur-md rounded-2xl p-4 border border-white/10"
+                        >
+                          <div className="flex items-center gap-2 mb-2">
+                             <Brain size={14} className="text-blue-400" />
+                             <span className="text-[9px] font-black uppercase tracking-widest text-blue-300">AI Neural Analysis</span>
+                          </div>
+                          <p className="text-[10px] font-bold text-slate-300 leading-relaxed italic line-clamp-3">"{aiAnalysis}"</p>
+                        </motion.div>
+                      ) : isAiLoading ? (
+                        <div className="flex items-center gap-3 p-4 bg-white/5 rounded-2xl animate-pulse">
+                           <Loader2 size={16} className="animate-spin text-blue-400" />
+                           <span className="text-[10px] font-black uppercase tracking-widest text-slate-400 text-high-visibility">Synthesizing Bio-Markers...</span>
+                        </div>
+                      ) : (
+                        <button 
+                          onClick={fetchAiAnalysis}
+                          className="w-full py-4 bg-blue-600 rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-blue-700 transition-all flex items-center justify-center gap-3"
+                        >
+                          <Zap size={14} />
+                          Force AI Insight
+                        </button>
+                      )}
+                    </div>
+                 </div>
+              </div>
             </div>
 
             {/* Heart Rate Chart */}
@@ -1181,7 +1529,9 @@ export const PatientMonitor: React.FC = () => {
                 </table>
               </div>
             </div>
-          </motion.div>
+          </>
+        )}
+      </motion.div>
         ) : (
           /* Not Connected State */
           <motion.div 

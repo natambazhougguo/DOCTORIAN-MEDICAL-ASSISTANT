@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { motion } from 'motion/react';
+import { motion, AnimatePresence } from 'motion/react';
 import { 
   HelpCircle, 
   BookOpen, 
@@ -17,10 +17,15 @@ import {
   Mail,
   Phone,
   MapPin,
-  Send
+  Send,
+  Brain,
+  Activity,
+  Heart,
+  Stethoscope,
+  Shield
 } from 'lucide-react';
 
-export type ResourceType = 'help' | 'community' | 'privacy' | 'terms' | 'feedback';
+export type ResourceType = 'help' | 'community' | 'privacy' | 'terms' | 'feedback' | 'protocols';
 
 interface ResourceViewProps {
   type: ResourceType;
@@ -30,6 +35,8 @@ interface ResourceViewProps {
 export const ResourceView: React.FC<ResourceViewProps> = ({ type, onBack }) => {
   const [feedbackText, setFeedbackText] = useState('');
   const [rating, setRating] = useState<string | null>(null);
+
+  const [isSubmitted, setIsSubmitted] = useState(false);
 
   const handleContactWhatsApp = (message: string = "Hello, I need assistance with Doctorian AI.") => {
     const url = `https://wa.me/256787674140?text=${encodeURIComponent(message)}`;
@@ -43,10 +50,14 @@ export const ResourceView: React.FC<ResourceViewProps> = ({ type, onBack }) => {
 
   const handleSubmitFeedback = () => {
     if (!feedbackText.trim()) return;
+    setIsSubmitted(true);
     const message = `Feedback for Doctorian AI\nRating: ${rating || 'Not rated'}\n\nMessage: ${feedbackText}`;
     
-    // Provide choice or just use email as default for feedback
-    handleContactEmail("Doctorian AI User Feedback", message);
+    setTimeout(() => {
+      handleContactEmail("Doctorian AI User Feedback", message);
+      setFeedbackText('');
+      setRating(null);
+    }, 2000);
   };
 
   const renderContent = () => {
@@ -281,6 +292,87 @@ export const ResourceView: React.FC<ResourceViewProps> = ({ type, onBack }) => {
         );
 
 
+      case 'protocols':
+        return (
+          <section className="space-y-12" aria-labelledby="protocols-title">
+            <div className="text-center max-w-2xl mx-auto">
+              <div className="bg-purple-100 dark:bg-purple-900/30 w-16 h-16 rounded-2xl flex items-center justify-center text-purple-600 dark:text-purple-400 mx-auto mb-6" aria-hidden="true">
+                <BookOpen size={32} />
+              </div>
+              <h2 id="protocols-title" className="text-3xl font-black text-slate-900 dark:text-white mb-4 tracking-tight text-high-visibility uppercase">Clinical Protocols</h2>
+              <p className="text-slate-500 dark:text-slate-400 font-bold text-lg leading-relaxed">Standardized diagnostic frameworks and neuro-clinical guidelines for authorized personnel.</p>
+            </div>
+
+            <div className="grid md:grid-cols-2 gap-8">
+              {[
+                { 
+                  title: "Neuro-Anatomy Visualization", 
+                  desc: "Protocols for multi-layered anatomical rendering and neural pathway mapping.",
+                  status: "Certified",
+                  icon: <Brain size={24} className="text-purple-500" />
+                },
+                { 
+                  title: "Biometric Data Handling", 
+                  desc: "Procedures for secure capture, transmission, and synthesis of real-time vital streams.",
+                  status: "Standard",
+                  icon: <Activity size={24} className="text-emerald-500" />
+                },
+                { 
+                  title: "AI-Assisted Diagnostic Flow", 
+                  desc: "Neural network validation steps for cross-referencing AI insights with clinical literature.",
+                  status: "Verified",
+                  icon: <Stethoscope size={24} className="text-blue-500" />
+                },
+                { 
+                  title: "Surgical Simulation Pre-Op", 
+                  desc: "Pre-operative digital twin modeling and risk assessment calibration protocols.",
+                  status: "Critical",
+                  icon: <Heart size={24} className="text-rose-500" />
+                }
+              ].map((protocol, i) => (
+                <div key={i} className="bg-white dark:bg-slate-900 p-8 rounded-[2.5rem] border border-slate-100 dark:border-slate-800 shadow-sm hover:shadow-xl transition-all group">
+                  <div className="flex items-start justify-between mb-6">
+                    <div className="p-4 bg-slate-50 dark:bg-slate-800 rounded-2xl group-hover:scale-110 transition-transform">
+                      {protocol.icon}
+                    </div>
+                    <span className={`px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest ${
+                      protocol.status === 'Certified' ? 'bg-blue-100 text-blue-600' :
+                      protocol.status === 'Verified' ? 'bg-emerald-100 text-emerald-600' :
+                      protocol.status === 'Critical' ? 'bg-rose-100 text-rose-600 text-pulse' :
+                      'bg-slate-100 text-slate-500'
+                    }`}>
+                      {protocol.status}
+                    </span>
+                  </div>
+                  <h4 className="text-xl font-black text-slate-900 dark:text-white mb-3 text-high-visibility uppercase tracking-tight">{protocol.title}</h4>
+                  <p className="text-sm text-slate-500 dark:text-slate-400 font-medium leading-relaxed mb-6">{protocol.desc}</p>
+                  <button className="w-full py-4 bg-slate-900 dark:bg-slate-800 text-white rounded-2xl text-xs font-black uppercase tracking-[0.2em] hover:bg-blue-600 transition-all">
+                    Initialize Protocol
+                  </button>
+                </div>
+              ))}
+            </div>
+
+            <div className="bg-slate-900 text-white p-10 rounded-[3rem] relative overflow-hidden">
+               <div className="relative z-10">
+                 <h3 className="text-2xl font-black mb-4 uppercase tracking-tighter">System-Wide Compliance</h3>
+                 <p className="text-slate-400 text-sm max-w-2xl mb-8 font-medium">All protocols are dynamically updated from the Cognis Global Repository. Last sync: {new Date().toLocaleDateString()} at {new Date().toLocaleTimeString()}.</p>
+                 <div className="flex gap-4">
+                   <div className="px-4 py-2 bg-white/10 rounded-xl flex items-center gap-2 border border-white/10">
+                      <Shield size={16} className="text-emerald-400" />
+                      <span className="text-[10px] font-bold uppercase tracking-widest">ISO 27001 Certified</span>
+                   </div>
+                   <div className="px-4 py-2 bg-white/10 rounded-xl flex items-center gap-2 border border-white/10">
+                      <CheckCircle2 size={16} className="text-blue-400" />
+                      <span className="text-[10px] font-bold uppercase tracking-widest">HIPAA Compliant</span>
+                   </div>
+                 </div>
+               </div>
+               <div className="absolute -right-20 -bottom-20 w-80 h-80 bg-blue-600 opacity-20 blur-3xl rounded-full"></div>
+            </div>
+          </section>
+        );
+
       case 'feedback':
         return (
           <section className="space-y-12" aria-labelledby="feedback-title">
@@ -292,85 +384,115 @@ export const ResourceView: React.FC<ResourceViewProps> = ({ type, onBack }) => {
               <p className="text-slate-500 dark:text-slate-400 font-bold">Help us build the future of healthcare by sharing your thoughts.</p>
             </div>
 
-            <div className="max-w-2xl mx-auto bg-white dark:bg-slate-900 p-8 sm:p-12 rounded-[3rem] border border-slate-100 dark:border-slate-800 shadow-2xl shadow-slate-200 dark:shadow-slate-950/50">
-              <div className="space-y-8">
-                <section aria-labelledby="rating-title">
-                  <h3 id="rating-title" className="text-lg font-black text-slate-900 dark:text-white mb-6 text-center">How would you rate your experience?</h3>
-                  <div className="flex justify-center gap-4 sm:gap-6" role="radiogroup" aria-labelledby="rating-title">
-                    {[
-                      { emoji: '😞', label: 'Unsatisfied' },
-                      { emoji: '😐', label: 'Neutral' },
-                      { emoji: '😊', label: 'Satisfied' },
-                      { emoji: '🤩', label: 'Excellent' }
-                    ].map((item, i) => (
-                      <button 
-                        key={i} 
-                        onClick={() => setRating(item.emoji)}
-                        aria-label={item.label}
-                        aria-checked={rating === item.emoji}
-                        role="radio"
-                        className={`w-12 h-12 sm:w-16 sm:h-16 rounded-2xl flex items-center justify-center text-2xl sm:text-3xl transition-all border outline-none focus-visible:ring-4 focus-visible:ring-blue-500/20 ${
-                          rating === item.emoji 
-                            ? 'bg-blue-600 border-blue-500 scale-110 shadow-lg' 
-                            : 'bg-slate-50 dark:bg-slate-800 border-transparent hover:bg-blue-50 dark:hover:bg-blue-900/20 hover:scale-110'
-                        }`}
-                      >
-                        <span aria-hidden="true">{item.emoji}</span>
-                      </button>
-                    ))}
-                  </div>
-                </section>
-
-                <div className="space-y-4">
-                  <section aria-labelledby="tags-title">
-                    <label id="tags-title" className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">What do you love most?</label>
-                    <div className="flex flex-wrap gap-2" role="group" aria-labelledby="tags-title">
-                      {['AI Accuracy', 'User Interface', 'Speed', 'Privacy', 'Features'].map((tag) => (
-                        <button 
-                          key={tag} 
-                          onClick={() => setFeedbackText(prev => prev + (prev ? ', ' : '') + tag)}
-                          className="px-4 py-2 rounded-xl bg-slate-50 dark:bg-slate-800 text-xs font-bold text-slate-600 dark:text-slate-400 border border-slate-100 dark:border-slate-700 hover:bg-blue-600 hover:text-white transition-all outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
-                        >
-                          {tag}
-                        </button>
-                      ))}
+            <div className="max-w-2xl mx-auto bg-white dark:bg-slate-900 p-8 sm:p-12 rounded-[3rem] border border-slate-100 dark:border-slate-800 shadow-2xl shadow-slate-200 dark:shadow-slate-950/50 relative overflow-hidden">
+              <AnimatePresence mode="wait">
+                {isSubmitted ? (
+                  <motion.div 
+                    key="success"
+                    initial={{ opacity: 0, scale: 0.9 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    exit={{ opacity: 0, scale: 0.9 }}
+                    className="py-12 text-center space-y-6"
+                  >
+                    <div className="w-24 h-24 bg-emerald-100 dark:bg-emerald-900/30 rounded-full flex items-center justify-center text-emerald-600 dark:text-emerald-400 mx-auto border-4 border-emerald-50 dark:border-emerald-800 animate-bounce">
+                      <CheckCircle2 size={48} />
                     </div>
-                  </section>
-                  <div>
-                    <label htmlFor="feedback-textarea" className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">Any suggestions for us?</label>
-                    <textarea 
-                      id="feedback-textarea"
-                      rows={4}
-                      value={feedbackText}
-                      onChange={(e) => setFeedbackText(e.target.value)}
-                      placeholder="Tell us what we can do better..."
-                      className="w-full px-6 py-4 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl text-sm font-bold focus:outline-none focus:ring-4 focus:ring-blue-500/10 transition-all resize-none dark:text-white placeholder:text-slate-500"
-                    />
-                  </div>
-                  <div className="flex flex-col sm:flex-row gap-4">
+                    <h3 className="text-2xl font-black text-slate-900 dark:text-white uppercase tracking-tighter">Feedback Synchronized</h3>
+                    <p className="text-slate-500 dark:text-slate-400 font-bold max-w-sm mx-auto">Your insights have been transmitted to the core intelligence protocols for processing. Thank you for building the future with us.</p>
                     <button 
-                      onClick={handleSubmitFeedback}
-                      className="flex-1 bg-white text-emerald-600 py-5 rounded-2xl font-black text-base hover:bg-emerald-50 transition-all shadow-xl active:scale-95 flex items-center justify-center gap-2 border border-emerald-100 dark:bg-slate-800 dark:border-slate-700"
+                      onClick={() => setIsSubmitted(false)}
+                      className="text-blue-600 font-black text-xs uppercase tracking-widest hover:underline pt-4"
                     >
-                      <Mail size={20} aria-hidden="true" />
-                      SUBMIT VIA EMAIL
+                      SEND ANOTHER REPORT
                     </button>
-                    <button 
-                      onClick={() => {
-                        if (!feedbackText.trim()) return;
-                        handleContactWhatsApp(`Feedback for Doctorian AI\nRating: ${rating || 'Not rated'}\n\nMessage: ${feedbackText}`);
-                      }}
-                      className="flex-1 group relative bg-emerald-500 text-white py-6 rounded-[2rem] font-black text-sm hover:scale-[1.02] active:scale-95 transition-all shadow-xl shadow-emerald-500/20 flex items-center justify-center gap-3 border border-white/20 overflow-hidden"
-                    >
-                      <div className="absolute inset-0 bg-gradient-to-tr from-emerald-600/0 via-emerald-600/0 to-emerald-400/30 opacity-0 group-hover:opacity-100 transition-opacity"></div>
-                      <div className="relative z-10 bg-white/20 p-2.5 rounded-xl group-hover:rotate-12 transition-transform">
-                        <MessageCircle size={24} aria-hidden="true" />
+                  </motion.div>
+                ) : (
+                  <motion.div 
+                    key="form"
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    className="space-y-8"
+                  >
+                    <section aria-labelledby="rating-title">
+                      <h3 id="rating-title" className="text-lg font-black text-slate-900 dark:text-white mb-6 text-center">How would you rate your experience?</h3>
+                      <div className="flex justify-center gap-4 sm:gap-6" role="radiogroup" aria-labelledby="rating-title">
+                        {[
+                          { emoji: '😞', label: 'Unsatisfied' },
+                          { emoji: '😐', label: 'Neutral' },
+                          { emoji: '😊', label: 'Satisfied' },
+                          { emoji: '🤩', label: 'Excellent' }
+                        ].map((item, i) => (
+                          <button 
+                            key={i} 
+                            onClick={() => setRating(item.emoji)}
+                            aria-label={item.label}
+                            aria-checked={rating === item.emoji}
+                            role="radio"
+                            className={`w-12 h-12 sm:w-16 sm:h-16 rounded-2xl flex items-center justify-center text-2xl sm:text-3xl transition-all border outline-none focus-visible:ring-4 focus-visible:ring-blue-500/20 ${
+                              rating === item.emoji 
+                                ? 'bg-blue-600 border-blue-500 scale-110 shadow-lg' 
+                                : 'bg-slate-50 dark:bg-slate-800 border-transparent hover:bg-blue-50 dark:hover:bg-blue-900/20 hover:scale-110'
+                            }`}
+                          >
+                            <span aria-hidden="true">{item.emoji}</span>
+                          </button>
+                        ))}
                       </div>
-                      <span className="relative z-10 uppercase tracking-widest">SUBMIT VIA WHATSAPP</span>
-                    </button>
-                  </div>
-                </div>
-              </div>
+                    </section>
+
+                    <div className="space-y-4">
+                      <section aria-labelledby="tags-title">
+                        <label id="tags-title" className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">What do you love most?</label>
+                        <div className="flex flex-wrap gap-2" role="group" aria-labelledby="tags-title">
+                          {['AI Accuracy', 'User Interface', 'Speed', 'Privacy', 'Features'].map((tag) => (
+                            <button 
+                              key={tag} 
+                              onClick={() => setFeedbackText(prev => prev + (prev ? ', ' : '') + tag)}
+                              className="px-4 py-2 rounded-xl bg-slate-50 dark:bg-slate-800 text-xs font-bold text-slate-600 dark:text-slate-400 border border-slate-100 dark:border-slate-700 hover:bg-blue-600 hover:text-white transition-all outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+                            >
+                              {tag}
+                            </button>
+                          ))}
+                        </div>
+                      </section>
+                      <div>
+                        <label htmlFor="feedback-textarea" className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">Any suggestions for us?</label>
+                        <textarea 
+                          id="feedback-textarea"
+                          rows={4}
+                          value={feedbackText}
+                          onChange={(e) => setFeedbackText(e.target.value)}
+                          placeholder="Tell us what we can do better..."
+                          className="w-full px-6 py-4 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl text-sm font-bold focus:outline-none focus:ring-4 focus:ring-blue-500/10 transition-all resize-none dark:text-white placeholder:text-slate-500"
+                        />
+                      </div>
+                      <div className="flex flex-col sm:flex-row gap-4">
+                        <button 
+                          onClick={handleSubmitFeedback}
+                          className="flex-1 bg-white dark:bg-slate-800 text-emerald-600 py-5 rounded-2xl font-black text-base hover:bg-emerald-50 dark:hover:bg-slate-700 transition-all shadow-xl active:scale-95 flex items-center justify-center gap-2 border border-emerald-100 dark:border-slate-700"
+                        >
+                          <Mail size={20} aria-hidden="true" />
+                          SUBMIT VIA EMAIL
+                        </button>
+                        <button 
+                          onClick={() => {
+                            if (!feedbackText.trim()) return;
+                            handleContactWhatsApp(`Feedback for Doctorian AI\nRating: ${rating || 'Not rated'}\n\nMessage: ${feedbackText}`);
+                          }}
+                          className="flex-1 group relative bg-emerald-500 text-white py-6 rounded-[2rem] font-black text-sm hover:scale-[1.02] active:scale-95 transition-all shadow-xl shadow-emerald-500/20 flex items-center justify-center gap-3 border border-white/20 overflow-hidden"
+                        >
+                          <div className="absolute inset-0 bg-gradient-to-tr from-emerald-600/0 via-emerald-600/0 to-emerald-400/30 opacity-0 group-hover:opacity-100 transition-opacity"></div>
+                          <div className="relative z-10 bg-white/20 p-2.5 rounded-xl group-hover:rotate-12 transition-transform">
+                            <MessageCircle size={24} aria-hidden="true" />
+                          </div>
+                          <span className="relative z-10 uppercase tracking-widest font-black">WHATSAPP</span>
+                        </button>
+                      </div>
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
             </div>
           </section>
         );

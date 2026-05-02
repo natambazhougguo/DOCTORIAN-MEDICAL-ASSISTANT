@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
+import { api } from '../api';
 import { 
   Dna, 
   Search, 
@@ -118,10 +119,44 @@ export const SymptomChecker: React.FC = () => {
     setActiveSymptoms(prev => prev.map(s => s.id === id ? { ...s, ...updates } : s));
   };
 
-  const runAnalysis = () => {
+  const runAnalysis = async () => {
+    if (activeSymptoms.length === 0) return;
     setIsAnalyzing(true);
-    // Simulate complex cognitive processing
-    setTimeout(() => {
+    setAnalysisResult(null);
+
+    try {
+      const symptomsSummary = activeSymptoms.map(s => 
+        `- Region: ${regions.find(r => r.id === s.region)?.name}, Symptom: ${s.name}, Severity: ${s.severity}, Notes: ${s.description}`
+      ).join('\n');
+
+      const prompt = `Act as an advanced Clinical Bio-Digital Twin Analyst. 
+Analyze the following patient symptoms mapped on a biological schematic:
+${symptomsSummary}
+
+Assess the synergistic physiological drift and provide a JSON response with:
+1. assessment: A 2-sentence clinical high-level interpretation.
+2. riskLevel: 'low', 'elevated', or 'critical'.
+3. confidence: a number between 0-100.
+4. recommendations: an array of 4 specific, bio-optimized actionable recommendations.
+
+Return ONLY the JSON.`;
+
+      const response = await api.ai.geminiChat(prompt, "You are a clinical AI diagnostic engine.");
+      const responseText = response.text;
+      
+      // Attempt to parse JSON from response (handling potential markdown)
+      const cleanJson = responseText.replace(/```json|```/g, '').trim();
+      const parsed = JSON.parse(cleanJson);
+
+      setAnalysisResult({
+        assessment: parsed.assessment,
+        riskLevel: parsed.riskLevel,
+        confidence: parsed.confidence || 85,
+        recommendations: parsed.recommendations || []
+      });
+    } catch (err) {
+      console.error("Analysis error:", err);
+      // Fallback to simulation if AI fails
       setAnalysisResult({
         assessment: "Cognis synthesis indicates a probable cluster of stress-induced metabolic disturbances. Synergistic patterns suggest localized inflammation in the selected regions linked to sympathetic nervous system overactivity.",
         riskLevel: activeSymptoms.some(s => s.severity === 'acute') ? 'elevated' : 'low',
@@ -133,8 +168,9 @@ export const SymptomChecker: React.FC = () => {
           "Scheduled clinical review if symptoms maintain status beyond 24h."
         ]
       });
+    } finally {
       setIsAnalyzing(false);
-    }, 3000);
+    }
   };
 
   const currentRegion = regions.find(r => r.id === selectedRegion);

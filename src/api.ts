@@ -1,4 +1,3 @@
-import { GoogleGenAI } from "@google/genai";
 
 export interface User {
   id: string;
@@ -6,6 +5,11 @@ export interface User {
   displayName: string;
   photoURL?: string;
   role: string;
+  credits: number;
+  institutionId?: string;
+  subscriptionTier: 'free' | 'silver' | 'gold' | 'pro' | 'business';
+  subscriptionStatus?: 'active' | 'expired' | 'none' | 'pending';
+  lastPaymentDate?: string;
   createdAt: string;
 }
 
@@ -20,10 +24,6 @@ export interface HealthRecord {
 }
 
 const API_BASE = "/api";
-
-// Initialize Gemini directly in the client
-// The platform injects process.env.GEMINI_API_KEY into the browser environment
-const genAI = new GoogleGenAI({ apiKey: (process.env.GEMINI_API_KEY || "") });
 
 export const api = {
   auth: {
@@ -74,6 +74,14 @@ export const api = {
       return data.user as User;
     },
     webauthn: {
+      async getCredentials() {
+        const res = await fetch(`${API_BASE}/auth/webauthn/credentials`, {
+          credentials: "include",
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || "Failed to fetch credentials");
+        return data.credentials as any[];
+      },
       async registerOptions() {
         const res = await fetch(`${API_BASE}/auth/webauthn/register-options`, {
           method: "POST",
@@ -157,6 +165,26 @@ export const api = {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Social login failed");
       return data.user as User;
+    },
+    async upgradeSubscription(tier: 'silver' | 'gold', amount: number, evidence?: string) {
+      const res = await fetch(`${API_BASE}/auth/subscription/upgrade`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ tier, amount, evidence }),
+        credentials: "include",
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Subscription upgrade failed");
+      return data.user as User;
+    },
+    async generateOperationalIdea() {
+      const res = await fetch(`${API_BASE}/ai/operational-ideas`, {
+        method: "POST",
+        credentials: "include",
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Generation failed");
+      return data.idea as string;
     }
   },
   admin: {
@@ -195,6 +223,27 @@ export const api = {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed to update user role");
       return data.success as boolean;
+    },
+    async listBilling(page: number = 1, limit: number = 10) {
+      const res = await fetch(`${API_BASE}/admin/billing/all?page=${page}&limit=${limit}`, {
+        credentials: "include",
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to fetch billing records");
+      return data as { payments: any[], pagination: any };
+    }
+  },
+  billing: {
+    async getHistory(page: number = 1, limit: number = 10) {
+      const res = await fetch(`${API_BASE}/billing/history?page=${page}&limit=${limit}`, {
+        credentials: "include",
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to fetch billing history");
+      return data as { history: any[], pagination: any };
+    },
+    exportUrl() {
+      return `${API_BASE}/billing/export`;
     }
   },
   notifications: {
@@ -249,22 +298,22 @@ export const api = {
     }
   },
   alerts: {
-    async sendSms(message: string) {
+    async sendSms(message: string, toDoctor?: string, toMentor?: string) {
       const res = await fetch(`${API_BASE}/alerts/send-sms`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message }),
+        body: JSON.stringify({ message, toDoctor, toMentor }),
         credentials: "include",
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed to send alert");
       return data as { success: boolean; simulated?: boolean; message: string };
     },
-    async makeCall(message: string) {
+    async makeCall(message: string, toDoctor?: string, toMentor?: string) {
       const res = await fetch(`${API_BASE}/alerts/make-call`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message }),
+        body: JSON.stringify({ message, toDoctor, toMentor }),
         credentials: "include",
       });
       const data = await res.json();
@@ -284,58 +333,46 @@ export const api = {
     }
   },
   ai: {
-    async geminiChat(messages: { role: string; text: string }[], systemInstruction: string, model: string, temperature: number) {
-      try {
-        const result = await genAI.models.generateContent({
-          model: model || "gemini-3-flash-preview",
-          contents: messages.map(m => ({
-            role: m.role === 'user' ? 'user' : 'model',
-            parts: [{ text: m.text }]
-          })),
-          config: {
-            systemInstruction,
-            temperature: temperature || 0.7,
-          }
-        });
+    async geminiChat(
+      messages: { role: string; text: string }[] | string, 
+      systemInstruction: string = "You are a helpful medical assistant.", 
+      model: string = "gemini-1.5-flash", 
+      temperature: number = 0.7
+    ) {
+      const payloadMessages = typeof messages === 'string' 
+        ? [{ role: 'user', text: messages }] 
+        : messages;
 
-        let imageData = null;
-        if (result.candidates?.[0]?.content?.parts) {
-          for (const part of result.candidates[0].content.parts) {
-            if (part.inlineData) {
-              imageData = part.inlineData.data;
-            }
-          }
-        }
-
-        return { text: result.text || "", imageData };
-      } catch (err: any) {
-        console.error("[GEMINI CLIENT ERROR]", err);
-        throw err; // Components will handle the error message
-      }
+      const res = await fetch(`${API_BASE}/ai/chat`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ 
+          messages: payloadMessages, 
+          systemInstruction, 
+          modelName: model, 
+          temperature 
+        }),
+        credentials: "include",
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to get AI response");
+      return data as { text: string; imageData?: string; creditsRemaining?: number | string };
+    },
+    async voiceChat(text: string, voiceName: string = 'Charon') {
+      const res = await fetch(`${API_BASE}/ai/voice`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text, voiceName }),
+        credentials: "include",
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "AI Voice call failed");
+      return data as { text: string };
     },
     async *geminiChatStream(messages: { role: string; text: string }[], systemInstruction: string, model: string, temperature: number) {
-      try {
-        const stream = await genAI.models.generateContentStream({
-          model: model || "gemini-3-flash-preview",
-          contents: messages.map(m => ({
-            role: m.role === 'user' ? 'user' : 'model',
-            parts: [{ text: m.text }]
-          })),
-          config: {
-            systemInstruction,
-            temperature: temperature || 0.7,
-          }
-        });
-
-        for await (const chunk of stream) {
-          if (chunk.text) {
-            yield chunk.text;
-          }
-        }
-      } catch (err: any) {
-        console.error("[GEMINI STREAM ERROR]", err);
-        throw err;
-      }
+      // NOTE: Streaming is disabled to support credit deduction and response injection synchronously
+      const result = await this.geminiChat(messages, systemInstruction, model, temperature);
+      yield result.text;
     },
     async deepseekChat(messages: { role: string; text: string }[], systemInstruction: string) {
       const res = await fetch(`${API_BASE}/chat/deepseek`, {

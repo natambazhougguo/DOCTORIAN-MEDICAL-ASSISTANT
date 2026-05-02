@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { 
   Activity, Zap, Brain, ShieldCheck, RefreshCw, 
   Bot, Monitor, FileText, Stethoscope, LayoutGrid, 
-  Info, Bell, Search, Plus, ArrowRight, X, Pill, ChevronRight,
+  Info, Bell, Search, Plus, ArrowRight, ArrowLeft, X, Pill, ChevronRight,
   TrendingUp, Heart, Battery, Droplets, Clock,
   CheckCircle2,
   ListTodo,
@@ -56,10 +56,19 @@ export const Dashboard: React.FC<DashboardProps> = ({
     return saved ? JSON.parse(saved) : [];
   });
 
+  const [appointments, setAppointments] = useState<any[]>(() => {
+    const saved = localStorage.getItem('doctorian_appointments');
+    return saved ? JSON.parse(saved) : [
+      { id: '1', specialist: { name: 'Dr. Sarah Johnson' }, date: new Date(Date.now() + 86400000).toISOString(), slot: '10:30 AM', type: 'virtual' }
+    ];
+  });
+
   useEffect(() => {
     const handleStorage = () => {
-      const saved = localStorage.getItem('doctorian_tasks');
-      if (saved) setTasks(JSON.parse(saved));
+      const savedTasks = localStorage.getItem('doctorian_tasks');
+      if (savedTasks) setTasks(JSON.parse(savedTasks));
+      const savedAppts = localStorage.getItem('doctorian_appointments');
+      if (savedAppts) setAppointments(JSON.parse(savedAppts));
     };
     window.addEventListener('storage', handleStorage);
     return () => window.removeEventListener('storage', handleStorage);
@@ -79,6 +88,15 @@ export const Dashboard: React.FC<DashboardProps> = ({
   const [notifications, setNotifications] = useState<{id: string, text: string, type: 'info' | 'success' | 'warning'}[]>([]);
   const [timeframe, setTimeframe] = useState<'Day' | 'Week' | 'Month'>('Day');
   const [viewMode, setViewMode] = useState<'Real-time' | 'Predictive'>('Real-time');
+  
+  const [subView, setSubView] = useState<'main' | 'biosecurity' | 'alerts'>('main');
+  
+  const [systemLogs, setSystemLogs] = useState<{ id: string, event: string, time: string, level: 'low' | 'mid' | 'critical' }[]>([
+    { id: '1', event: 'Neural Link Synchronized', time: '12:42', level: 'low' },
+    { id: '2', event: 'Metabolic Shift Detected', time: '09:15', level: 'mid' },
+    { id: '3', event: 'Node Activation Successful', time: '08:00', level: 'low' },
+    { id: '4', event: 'Unauthorized Access Blocked', time: '04:22', level: 'critical' },
+  ]);
   
   const addNotification = (text: string, type: 'info' | 'success' | 'warning' = 'info') => {
     const id = Math.random().toString(36).substr(2, 9);
@@ -140,11 +158,15 @@ export const Dashboard: React.FC<DashboardProps> = ({
   };
 
   return (
-    <motion.div 
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      className="space-y-8 sm:space-y-12 pb-24"
-    >
+    <AnimatePresence mode="wait">
+      {subView === 'main' ? (
+        <motion.div 
+          key="main"
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: -20 }}
+          className="space-y-8 sm:space-y-12 pb-24"
+        >
       <div className="bg-white dark:bg-slate-900 rounded-[3rem] p-6 sm:p-10 lg:p-16 shadow-2xl relative overflow-hidden border border-slate-100 dark:border-slate-800 transition-all group">
         <div className="absolute top-0 right-0 p-12 opacity-5 pointer-events-none group-hover:opacity-10 transition-opacity">
           <Activity size={320} className="w-[160px] h-[160px] sm:w-[320px] sm:h-[320px] text-blue-600" />
@@ -152,53 +174,52 @@ export const Dashboard: React.FC<DashboardProps> = ({
         
         <div className="relative z-10 grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-16 items-center">
           <div className="lg:col-span-7 space-y-6 sm:space-y-8">
-            <div className="flex items-center gap-6">
-              <div className="w-2 h-10 sm:w-2.5 sm:h-12 bg-blue-600 rounded-full animate-pulse shadow-[0_0_15px_rgba(37,99,235,0.5)]" />
-              <div>
-                <h1 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-[1000] tracking-tighter uppercase leading-none text-slate-900 dark:text-white">
-                  Cognis <span className="text-blue-600 italic font-serif lowercase tracking-normal">Nexus</span> Control
-                </h1>
-                <p className="text-blue-600 dark:text-blue-400 font-black text-[10px] uppercase tracking-[0.3em] mt-3">Operational Integrity: 99.9% / Quantum Secure</p>
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-6">
+              <div className="flex items-center gap-6">
+                <div className="w-2 h-10 sm:w-2.5 sm:h-12 bg-blue-600 rounded-full animate-pulse shadow-[0_0_15px_rgba(37,99,235,0.5)]" />
+                <div>
+                  <h1 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-[1000] tracking-tighter uppercase leading-none text-slate-900 dark:text-white text-high-visibility">
+                    Cognis <span className="text-blue-600 italic font-serif lowercase tracking-normal">Nexus</span> Control
+                  </h1>
+                  <p className="text-blue-600 dark:text-blue-400 font-black text-[11px] sm:text-[12px] uppercase tracking-[0.3em] mt-3 text-high-visibility">Operational Integrity: 99.9% / Quantum Secure</p>
+                </div>
               </div>
+              <button 
+                onClick={() => setSubView('alerts')}
+                className="group flex items-center gap-3 px-6 py-3 bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-2xl shadow-sm hover:shadow-md transition-all active:scale-95"
+              >
+                <div className="relative">
+                  <Bell size={20} className="text-blue-600 dark:text-blue-400" />
+                  <span className="absolute -top-1 -right-1 w-2 h-2 bg-rose-600 rounded-full border-2 border-white dark:border-slate-800" />
+                </div>
+                <div className="text-left">
+                  <p className="text-[10px] font-black uppercase tracking-widest text-slate-900 dark:text-white leading-none">Operational Alerts</p>
+                  <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">3 New Pulses</p>
+                </div>
+              </button>
             </div>
             
-            <p className="text-slate-500 dark:text-slate-400 font-bold text-lg sm:text-xl leading-relaxed max-w-2xl">
+            <p className="text-slate-500 dark:text-slate-400 font-bold text-lg sm:text-xl lg:text-2xl leading-relaxed max-w-2xl">
               Unified diagnostic interface for {user?.name || user?.displayName || 'Authorized User'}. Real-time biometric synthesis and predictive modeling active.
             </p>
 
             <div className="flex flex-wrap gap-4 pt-4">
               <button 
                 onClick={() => onNavigate('ai_nexus')}
-                className="px-8 py-4 bg-blue-600 text-white rounded-2xl shadow-xl shadow-blue-500/20 hover:scale-105 active:scale-95 transition-all font-black text-xs sm:text-base uppercase tracking-widest flex items-center gap-3 border-2 border-transparent"
+                className="flex-1 sm:flex-none px-8 py-5 bg-blue-600 text-white rounded-2xl shadow-xl shadow-blue-500/20 hover:scale-105 active:scale-95 transition-all font-black text-xs sm:text-base uppercase tracking-widest flex items-center justify-center gap-3 border-2 border-transparent"
               >
-                <Bot size={20} className="text-white animate-pulse" />
+                <Bot size={22} className="text-white animate-pulse" />
                 Doctorian AI
               </button>
 
               <button 
                 onClick={handleSOS}
                 disabled={isSosTriggering}
-                className="px-8 py-4 bg-rose-600 text-white rounded-2xl shadow-xl shadow-rose-500/20 hover:scale-105 active:scale-95 transition-all font-black text-xs sm:text-base uppercase tracking-widest flex items-center gap-3 border-2 border-transparent disabled:opacity-50"
+                className="flex-1 sm:flex-none px-8 py-5 bg-rose-600 text-white rounded-2xl shadow-xl shadow-rose-500/20 hover:scale-105 active:scale-95 transition-all font-black text-xs sm:text-base uppercase tracking-widest flex items-center justify-center gap-3 border-2 border-transparent disabled:opacity-50"
               >
-                <Zap size={20} className={isSosTriggering ? "animate-spin" : "text-white animate-pulse"} />
+                <Zap size={22} className={isSosTriggering ? "animate-spin" : "text-white animate-pulse"} />
                 {isSosTriggering ? "Triggering..." : "SOS Emergency"}
               </button>
-              
-              <div className="p-1.5 bg-slate-100 dark:bg-slate-800 rounded-2xl flex gap-1 border border-slate-200 dark:border-slate-700 shadow-inner">
-                {(['Real-time', 'Predictive'] as const).map((mode) => (
-                  <button 
-                    key={mode}
-                    onClick={() => setViewMode(mode)}
-                    className={`px-6 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${
-                      viewMode === mode 
-                        ? 'bg-white dark:bg-slate-900 text-blue-600 shadow-xl' 
-                        : 'text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
-                    }`}
-                  >
-                    {mode}
-                  </button>
-                ))}
-              </div>
             </div>
           </div>
 
@@ -252,16 +273,16 @@ export const Dashboard: React.FC<DashboardProps> = ({
           <button 
             key={i} 
             onClick={() => setSelectedStat(stat)}
-            className="bg-white dark:bg-slate-900 p-4 sm:p-8 rounded-2xl sm:rounded-[2.5rem] border border-slate-100 dark:border-slate-800 shadow-sm hover:shadow-2xl transition-all group relative overflow-hidden text-left w-full"
+            className="bg-white dark:bg-slate-900 p-5 sm:p-8 rounded-2xl sm:rounded-[2.5rem] border border-slate-100 dark:border-slate-800 shadow-sm hover:shadow-2xl transition-all group relative overflow-hidden text-left w-full"
           >
             <div className={`absolute -right-2 -top-2 w-12 h-12 sm:w-20 sm:h-20 bg-${stat.color}-500/5 rounded-full blur-xl sm:blur-2xl group-hover:bg-${stat.color}-500/10 transition-all`} />
-            <div className={`w-8 h-8 sm:w-12 sm:h-12 rounded-xl sm:rounded-2xl bg-${stat.color}-50 dark:bg-${stat.color}-900/20 text-${stat.color}-600 dark:text-${stat.color}-400 flex items-center justify-center mb-3 sm:mb-6 group-hover:scale-110 transition-transform relative z-10`}>
-              {React.cloneElement(stat.icon as any, { size: 16 })}
+            <div className={`w-10 h-10 sm:w-12 sm:h-12 rounded-xl sm:rounded-2xl bg-${stat.color}-50 dark:bg-${stat.color}-900/20 text-${stat.color}-600 dark:text-${stat.color}-400 flex items-center justify-center mb-4 sm:mb-6 group-hover:scale-110 transition-transform relative z-10 shadow-sm`}>
+              {React.cloneElement(stat.icon as any, { size: 20 })}
             </div>
-            <p className="text-[8px] sm:text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1 sm:mb-2 relative z-10">{stat.label}</p>
+            <p className="text-[10px] sm:text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none mb-2 sm:mb-2 relative z-10 text-high-visibility">{stat.label}</p>
             <div className="flex items-baseline justify-between relative z-10">
-              <h3 className="text-lg sm:text-3xl font-black text-slate-900 dark:text-white tracking-tighter leading-none">{stat.value}</h3>
-              <span className={`text-[8px] sm:text-[10px] font-black ${stat.trend.startsWith('+') ? 'text-emerald-500' : stat.trend === 'Stable' ? 'text-blue-500' : 'text-rose-500'}`}>
+              <h3 className="text-xl sm:text-3xl font-black text-slate-900 dark:text-white tracking-tighter leading-none text-high-visibility">{stat.value}</h3>
+              <span className={`text-[10px] sm:text-[10px] font-black ${stat.trend.startsWith('+') ? 'text-emerald-500' : stat.trend === 'Stable' ? 'text-blue-500' : 'text-rose-500'}`}>
                 {stat.trend}
               </span>
             </div>
@@ -382,7 +403,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
             <div className="space-y-4 relative z-10">
               {[
                 { label: 'Start Cognis Consult', icon: <ArrowRight size={14} />, action: () => onNavigate('ai_lab') },
-                { label: 'Verify Bio-Identity', icon: <Fingerprint size={14} />, action: () => onNavigate('biosecurity') },
+                { label: 'Verify Bio-Identity', icon: <Fingerprint size={14} />, action: () => setSubView('biosecurity') },
                 { label: 'Log Protocol Task', icon: <Plus size={14} />, action: () => onNavigate('tasks') },
                 { label: 'Record Medication', icon: <Pill size={14} />, action: () => onNavigate('meds') },
                 { label: 'Scan Vital Matrix', icon: <Activity size={14} />, action: () => onNavigate('vitality') }
@@ -431,8 +452,52 @@ export const Dashboard: React.FC<DashboardProps> = ({
             </div>
           </div>
 
+          {/* Neural Session Queue */}
+          <div className="bg-white dark:bg-slate-900 p-6 sm:p-10 rounded-[3rem] border border-slate-200 dark:border-slate-800 shadow-sm flex flex-col">
+            <div className="flex items-center justify-between mb-8">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-purple-600/10 text-purple-600 flex items-center justify-center">
+                  <Clock size={20} />
+                </div>
+                <div>
+                  <h3 className="text-sm font-black text-slate-900 dark:text-white uppercase tracking-widest">Neural Sessions</h3>
+                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{appointments.length} Scheduled</p>
+                </div>
+              </div>
+              <button onClick={() => onNavigate('specialist')} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors">
+                <Plus size={18} className="text-slate-400" />
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              {appointments.slice(0, 2).map((appt) => (
+                <div key={appt.id} className="p-5 bg-slate-50 dark:bg-slate-800/50 rounded-2xl border border-slate-100 dark:border-white/5 relative overflow-hidden group">
+                  <div className="flex items-center justify-between mb-3">
+                    <span className="text-[9px] font-black text-blue-600 uppercase tracking-widest bg-blue-100 dark:bg-blue-900/30 px-2 py-0.5 rounded italic">
+                      {appt.type} link
+                    </span>
+                    <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">
+                       {new Date(appt.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} • {appt.slots ? appt.slots.join(', ') : appt.slot}
+                    </span>
+                  </div>
+                  <h4 className="text-xs font-black text-slate-900 dark:text-white uppercase tracking-tight mb-1">{appt.specialist.name}</h4>
+                  <div className="flex items-center justify-between mt-4">
+                    <button className="text-[10px] font-black text-slate-400 hover:text-rose-600 uppercase tracking-widest transition-colors">Abort</button>
+                    <button className="px-4 py-2 bg-slate-900 dark:bg-white text-white dark:text-slate-900 rounded-lg text-[9px] font-black uppercase tracking-widest hover:bg-blue-600 hover:text-white transition-all">Launch Link</button>
+                  </div>
+                </div>
+              ))}
+              {appointments.length === 0 && (
+                <div className="py-8 text-center text-slate-400 space-y-3">
+                   <p className="text-[10px] font-black uppercase tracking-widest">No Active Links</p>
+                   <button onClick={() => onNavigate('specialist')} className="text-[9px] font-black text-blue-600 underline">Sync with Specialist</button>
+                </div>
+              )}
+            </div>
+          </div>
+
           {/* Priority Task Protocol Queue */}
-          <div className="bg-white dark:bg-slate-900 p-10 rounded-[3rem] border border-slate-200 dark:border-slate-800 shadow-sm flex flex-col min-h-[300px]">
+          <div className="bg-white dark:bg-slate-900 p-6 sm:p-10 rounded-[3rem] border border-slate-200 dark:border-slate-800 shadow-sm flex flex-col min-h-[300px]">
             <div className="flex items-center justify-between mb-8">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-xl bg-blue-600/10 text-blue-600 flex items-center justify-center">
@@ -654,7 +719,13 @@ export const Dashboard: React.FC<DashboardProps> = ({
             <motion.button
               key={i}
               whileHover={{ y: -8, scale: 1.02 }}
-              onClick={() => onNavigate(item.view as any)}
+              onClick={() => {
+                if (item.view === 'biosecurity') {
+                  setSubView('biosecurity');
+                } else {
+                  onNavigate(item.view as any);
+                }
+              }}
               className="group bg-white dark:bg-slate-900 p-8 rounded-[3rem] border border-slate-100 dark:border-slate-800 shadow-sm hover:shadow-2xl transition-all text-left flex flex-col justify-between min-h-[240px] relative overflow-hidden"
             >
               <div className="flex justify-between items-start relative z-10">
@@ -1156,9 +1227,99 @@ export const Dashboard: React.FC<DashboardProps> = ({
             <Download size={14} /> INSTALL TO DEVICE
           </button>
         </motion.div>
-        {/* Bio-Security full-page view is now handled via onNavigate */}
       </div>
     </motion.div>
+  ) : subView === 'biosecurity' ? (
+        <motion.div
+          key="biosecurity"
+          initial={{ opacity: 0, x: 20 }}
+          animate={{ opacity: 1, x: 0 }}
+          exit={{ opacity: 0, x: -20 }}
+          className="flex-1 flex flex-col min-h-[600px] bg-white dark:bg-slate-900 rounded-[3rem] border border-slate-200 dark:border-slate-800 shadow-2xl overflow-hidden"
+        >
+          <div className="p-6 border-b border-slate-100 dark:border-slate-800 flex items-center gap-4 bg-slate-50 dark:bg-slate-900">
+             <button 
+               onClick={() => setSubView('main')}
+               className="p-2.5 bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-xl text-slate-400 hover:text-blue-600 transition-all shadow-sm"
+             >
+               <ArrowLeft size={18} />
+             </button>
+             <div>
+               <h3 className="text-sm font-black text-slate-900 dark:text-white uppercase tracking-tighter">Back to Dashboard</h3>
+               <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Protocol Visualization Ready</p>
+             </div>
+          </div>
+          <div className="flex-1 overflow-hidden">
+             <BioSecurity />
+          </div>
+        </motion.div>
+      ) : (
+        <motion.div
+          key="alerts"
+          initial={{ opacity: 0, x: 20 }}
+          animate={{ opacity: 1, x: 0 }}
+          exit={{ opacity: 0, x: -20 }}
+          className="flex-1 flex flex-col min-h-[600px] bg-white dark:bg-slate-900 rounded-[3rem] border border-slate-200 dark:border-slate-800 shadow-2xl overflow-hidden"
+        >
+          <div className="p-6 border-b border-slate-100 dark:border-slate-800 flex items-center gap-4 bg-slate-50 dark:bg-slate-900">
+             <button 
+               onClick={() => setSubView('main')}
+               className="p-2.5 bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-xl text-slate-400 hover:text-blue-600 transition-all shadow-sm"
+             >
+               <ArrowLeft size={18} />
+             </button>
+             <div>
+               <h3 className="text-sm font-black text-slate-900 dark:text-white uppercase tracking-tighter">Neural Alert Center</h3>
+               <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">System Log & Operational Feed</p>
+             </div>
+          </div>
+          <div className="flex-1 overflow-y-auto p-6 sm:p-10 space-y-6">
+             <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+               {[
+                 { label: 'Critical Alerts', count: systemLogs.filter(l => l.level === 'critical').length, color: 'text-rose-600' },
+                 { label: 'Active Monitors', count: 12, color: 'text-blue-600' },
+                 { label: 'System Health', count: '99.9%', color: 'text-emerald-600' },
+               ].map((stat, i) => (
+                 <div key={i} className="p-6 bg-slate-50 dark:bg-slate-800/50 rounded-3xl border border-slate-100 dark:border-slate-800">
+                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">{stat.label}</p>
+                    <p className={`text-2xl font-black ${stat.color} tracking-tighter uppercase`}>{stat.count}</p>
+                 </div>
+               ))}
+             </div>
+
+             <div className="space-y-4">
+               {systemLogs.map((log) => (
+                 <div key={log.id} className="p-5 bg-white dark:bg-slate-950 border border-slate-100 dark:border-slate-800 rounded-3xl flex items-center justify-between group hover:border-blue-200 transition-colors">
+                    <div className="flex items-center gap-4">
+                      <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${
+                        log.level === 'critical' ? 'bg-rose-50 dark:bg-rose-900/20 text-rose-600' :
+                        log.level === 'mid' ? 'bg-amber-50 dark:bg-amber-900/20 text-amber-600' :
+                        'bg-blue-50 dark:bg-blue-900/20 text-blue-600'
+                      }`}>
+                        <Bell size={20} />
+                      </div>
+                      <div>
+                        <p className="text-sm font-black text-slate-900 dark:text-white uppercase tracking-tight">{log.event}</p>
+                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Timestamp: {log.time}</p>
+                      </div>
+                    </div>
+                    <div className={`px-3 py-1 rounded-full text-[8px] font-black uppercase tracking-widest ${
+                      log.level === 'critical' ? 'bg-rose-600 text-white shadow-lg shadow-rose-200 dark:shadow-none' :
+                      'text-slate-400 bg-slate-50 dark:bg-slate-800'
+                    }`}>
+                      {log.level}
+                    </div>
+                 </div>
+               ))}
+             </div>
+
+             <button className="w-full py-4 bg-slate-900 dark:bg-white text-white dark:text-slate-900 rounded-2xl text-[10px] font-black uppercase tracking-widest mt-8 hover:opacity-90 transition-opacity">
+               Purge Operational Log
+             </button>
+          </div>
+        </motion.div>
+      )}
+    </AnimatePresence>
   );
 };
 

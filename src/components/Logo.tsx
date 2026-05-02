@@ -2,15 +2,15 @@ import React from 'react';
 import { Stethoscope, BrainCircuit } from 'lucide-react';
 
 interface LogoProps {
-  size?: 'sm' | 'md' | 'lg' | 'xl';
+  size?: 'xs' | 'sm' | 'md' | 'lg' | 'xl';
   className?: string;
   showText?: boolean;
 }
 
 export const Logo: React.FC<LogoProps> = ({ size = 'md', className = '', showText = true }) => {
-  const iconSize = size === 'sm' ? 20 : size === 'md' ? 24 : size === 'lg' ? 32 : size === 'xl' ? 48 : 24;
-  const containerSize = size === 'sm' ? 'w-10 h-10' : size === 'md' ? 'w-12 h-12' : size === 'lg' ? 'w-16 h-16' : size === 'xl' ? 'w-24 h-24' : 'w-12 h-12';
-  const fontSize = size === 'sm' ? 'text-lg' : size === 'md' ? 'text-xl' : 'text-2xl';
+  const iconSize = size === 'xs' ? 16 : size === 'sm' ? 20 : size === 'md' ? 24 : size === 'lg' ? 32 : size === 'xl' ? 48 : 24;
+  const containerSize = size === 'xs' ? 'w-8 h-8' : size === 'sm' ? 'w-10 h-10' : size === 'md' ? 'w-12 h-12' : size === 'lg' ? 'w-16 h-16' : size === 'xl' ? 'w-24 h-24' : 'w-12 h-12';
+  const fontSize = size === 'xs' ? 'text-sm' : size === 'sm' ? 'text-lg' : size === 'md' ? 'text-xl' : 'text-2xl';
 
   return (
     <div className={`flex items-center gap-3 group/logo ${className}`}>
