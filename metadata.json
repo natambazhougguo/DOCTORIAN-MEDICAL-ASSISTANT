@@ -1,5 +1,5 @@
 {
   "name": "Doctorian AI",
   "description": "Next-gen medical intelligence platform featuring cognitive performance tracking, longevity analytics, and AI-driven health insights.",
-  "requestFramePermissions": ["microphone", "camera", "publickey-credentials", "publickey-credentials-create", "publickey-credentials-get"]
+  "requestFramePermissions": ["microphone", "camera", "publickey-credentials", "publickey-credentials-create", "publickey-credentials-get", "geolocation"]
 }

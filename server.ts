@@ -1,6 +1,7 @@
 import express from "express";
 import { createServer as createViteServer } from "vite";
 import path from "path";
+import fs from "fs";
 import { fileURLToPath } from "url";
 import Database from "better-sqlite3";
 import jwt from "jsonwebtoken";
@@ -11,6 +12,7 @@ import axios from "axios";
 import nodemailer from "nodemailer";
 import twilio from "twilio";
 import dotenv from "dotenv";
+import Flutterwave from "flutterwave-node-v3";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import {
   generateRegistrationOptions,
@@ -55,11 +57,12 @@ function getCleanApiKey() {
     }
   }
 
-  // Prioritize OpenRouter/DeepSeek keys
-  const orKey = validKeys.find(k => k.toLowerCase().startsWith('sk-or-'));
+  const orKey = process.env.OPENROUTER_API_KEY || validKeys.find(k => k.toLowerCase().startsWith('sk-or-'));
   if (orKey) {
-    console.log(`[AI] Selected OpenRouter Key (starts with: ${orKey.substring(0, 8)}...)`);
-    return orKey;
+    if (typeof orKey === 'string' && orKey.length > 20) {
+      console.log(`[AI] Selected OpenRouter Key (starts with: ${orKey.substring(0, 8)}...)`);
+      return orKey.trim().replace(/^["']|["']$/g, "");
+    }
   }
 
   const skKey = validKeys.find(k => k.toLowerCase().startsWith('sk-'));
@@ -129,18 +132,19 @@ async function callAI(options: {
   if (isSkKey) {
     console.log(`[AI] Routing via ${isORKey ? 'OpenRouter' : 'OpenAI-compatible'} provider...`);
     try {
-      // Determine model based on modelName and key prefix
-      let providerModel = "google/gemini-flash-1.5";
+      // Default to DeepSeek R1 via OpenRouter as requested
+      let providerModel = "deepseek/deepseek-r1"; 
       let apiUrl = "https://openrouter.ai/api/v1/chat/completions";
 
       if (isORKey) {
-        providerModel = finalModel.includes("pro") ? "google/gemini-pro-1.5" : "google/gemini-flash-1.5";
+        // If it's OpenRouter, use DeepSeek R1 for specialized tasks if requested or default to it
+        providerModel = "deepseek/deepseek-r1";
       } else if (apiKey.includes("deepseek")) {
         apiUrl = "https://api.deepseek.com/chat/completions";
-        providerModel = "deepseek-chat";
+        providerModel = "deepseek-reasoner"; // deepseek-r1's name on their native API
       } else {
-        // Fallback for generic sk- keys, try OpenRouter as it supports many models
-        providerModel = finalModel.includes("pro") ? "google/gemini-pro-1.5" : "google/gemini-flash-1.5";
+        // Fallback for generic sk- keys
+        providerModel = "deepseek/deepseek-r1";
       }
 
       const response = await axios.post(apiUrl, {
@@ -274,11 +278,38 @@ async function sendEmail(to: string, subject: string, text: string, html?: strin
 }
 
 // Database Setup
-const db = new Database("doctorian.db");
+const DB_PATH = "doctorian.db";
+
+let db: Database.Database;
+
+function initDatabase() {
+  try {
+    db = new Database(DB_PATH);
+    // Test if DB is reachable
+    db.prepare("SELECT 1").get();
+  } catch (err: any) {
+    if (err.code === 'SQLITE_CORRUPT') {
+      console.error("Database is corrupted. Attempting recovery...");
+      try {
+        if (fs.existsSync(DB_PATH)) {
+          fs.renameSync(DB_PATH, `${DB_PATH}.corrupted.${Date.now()}`);
+        }
+        db = new Database(DB_PATH);
+      } catch (recoveryErr) {
+        console.error("Recovery failed:", recoveryErr);
+        throw recoveryErr;
+      }
+    } else {
+      throw err;
+    }
+  }
+}
+
+initDatabase();
 
 // Initialize tables
-db.exec(`
-  CREATE TABLE IF NOT EXISTS users (
+const schemas = [
+  `CREATE TABLE IF NOT EXISTS users (
     id TEXT PRIMARY KEY,
     email TEXT UNIQUE NOT NULL,
     password TEXT NOT NULL,
@@ -288,17 +319,15 @@ db.exec(`
     credits INTEGER DEFAULT 5,
     institutionId TEXT,
     createdAt TEXT NOT NULL
-  );
-
-  CREATE TABLE IF NOT EXISTS notifications (
+  )`,
+  `CREATE TABLE IF NOT EXISTS notifications (
     id TEXT PRIMARY KEY,
     title TEXT NOT NULL,
     content TEXT NOT NULL,
     type TEXT DEFAULT 'info',
     createdAt DATETIME DEFAULT CURRENT_TIMESTAMP
-  );
-
-  CREATE TABLE IF NOT EXISTS records (
+  )`,
+  `CREATE TABLE IF NOT EXISTS records (
     id TEXT PRIMARY KEY,
     userId TEXT NOT NULL,
     type TEXT NOT NULL,
@@ -306,36 +335,33 @@ db.exec(`
     unit TEXT,
     date TEXT NOT NULL,
     notes TEXT,
+    attachmentURL TEXT,
     FOREIGN KEY(userId) REFERENCES users(id)
-  );
-
-  CREATE TABLE IF NOT EXISTS credentials (
+  )`,
+  `CREATE TABLE IF NOT EXISTS credentials (
     id TEXT PRIMARY KEY,
     userId TEXT NOT NULL,
     publicKey BLOB NOT NULL,
     counter INTEGER NOT NULL,
     transports TEXT,
     FOREIGN KEY(userId) REFERENCES users(id)
-  );
-
-  CREATE TABLE IF NOT EXISTS reset_tokens (
+  )`,
+  `CREATE TABLE IF NOT EXISTS reset_tokens (
     token TEXT PRIMARY KEY,
     userId TEXT NOT NULL,
     code TEXT,
     expiresAt TEXT NOT NULL,
     FOREIGN KEY(userId) REFERENCES users(id)
-  );
-
-  CREATE TABLE IF NOT EXISTS system_logs (
+  )`,
+  `CREATE TABLE IF NOT EXISTS system_logs (
     id TEXT PRIMARY KEY,
     userId TEXT,
     action TEXT NOT NULL,
     details TEXT,
     createdAt DATETIME DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY(userId) REFERENCES users(id)
-  );
-
-  CREATE TABLE IF NOT EXISTS feedback (
+  )`,
+  `CREATE TABLE IF NOT EXISTS feedback (
     id TEXT PRIMARY KEY,
     userId TEXT,
     messageId TEXT NOT NULL,
@@ -343,23 +369,52 @@ db.exec(`
     suggestion TEXT,
     timestamp TEXT NOT NULL,
     FOREIGN KEY(userId) REFERENCES users(id)
-  );
-`);
+  )`,
+  `CREATE TABLE IF NOT EXISTS medications (
+    id TEXT PRIMARY KEY,
+    userId TEXT NOT NULL,
+    name TEXT NOT NULL,
+    dosage TEXT,
+    frequency TEXT,
+    time TEXT,
+    category TEXT DEFAULT 'prescription',
+    remindersEnabled INTEGER DEFAULT 1,
+    createdAt DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY(userId) REFERENCES users(id)
+  )`,
+  `CREATE TABLE IF NOT EXISTS medication_intakes (
+    id TEXT PRIMARY KEY,
+    medicationId TEXT NOT NULL,
+    userId TEXT NOT NULL,
+    takenAt DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY(medicationId) REFERENCES medications(id),
+    FOREIGN KEY(userId) REFERENCES users(id)
+  )`
+];
 
-// Migration: Add code column to reset_tokens if it doesn't exist
-try {
-  db.prepare("ALTER TABLE reset_tokens ADD COLUMN code TEXT").run();
-} catch (e) {
-  // Column probably already exists
-}
+schemas.forEach(schema => db.exec(schema));
 
-// Migration: Add subscription columns to users if they don't exist
-try { db.prepare("ALTER TABLE users ADD COLUMN subscriptionTier TEXT DEFAULT 'free'").run(); } catch (e) {}
-try { db.prepare("ALTER TABLE users ADD COLUMN subscriptionStatus TEXT DEFAULT 'none'").run(); } catch (e) {}
-try { db.prepare("ALTER TABLE users ADD COLUMN lastPaymentDate TEXT").run(); } catch (e) {}
-try { db.prepare("ALTER TABLE users ADD COLUMN paymentEvidence TEXT").run(); } catch (e) {}
-try { db.prepare("ALTER TABLE users ADD COLUMN credits INTEGER DEFAULT 5").run(); } catch (e) {}
-try { db.prepare("ALTER TABLE users ADD COLUMN institutionId TEXT").run(); } catch (e) {}
+// Migration: Add columns if they don't exist
+const migrations = [
+  "ALTER TABLE records ADD COLUMN attachmentURL TEXT",
+  "ALTER TABLE reset_tokens ADD COLUMN code TEXT",
+  "ALTER TABLE users ADD COLUMN subscriptionTier TEXT DEFAULT 'free'",
+  "ALTER TABLE users ADD COLUMN subscriptionStatus TEXT DEFAULT 'none'",
+  "ALTER TABLE users ADD COLUMN lastPaymentDate TEXT",
+  "ALTER TABLE users ADD COLUMN paymentEvidence TEXT",
+  "ALTER TABLE users ADD COLUMN credits INTEGER DEFAULT 5",
+  "ALTER TABLE users ADD COLUMN institutionId TEXT",
+  "ALTER TABLE medications ADD COLUMN remindersEnabled INTEGER DEFAULT 1"
+];
+
+migrations.forEach(sql => {
+  try {
+    db.prepare(sql).run();
+  } catch (e) {
+    // Ignore error if column already exists
+  }
+});
+
 db.prepare(`
   CREATE TABLE IF NOT EXISTS payments (
     id TEXT PRIMARY KEY,
@@ -372,6 +427,7 @@ db.prepare(`
     createdAt DATETIME DEFAULT CURRENT_TIMESTAMP
   )
 `).run();
+
 
 const RP_NAME = "Doctorian AI";
 
@@ -467,6 +523,7 @@ async function startServer() {
           email, 
           displayName, 
           role: "user", 
+          credits: 5,
           subscriptionTier: "free",
           subscriptionStatus: "none",
           createdAt 
@@ -819,6 +876,103 @@ async function startServer() {
     }
   });
 
+  app.post("/api/billing/subscribe", authenticate, async (req: any, res) => {
+    const { planId, transaction_id } = req.body;
+    if (!['catalyst', 'quantum', 'core'].includes(planId)) {
+      return res.status(400).json({ error: "Invalid plan" });
+    }
+
+    try {
+      const flw = new Flutterwave(
+        process.env.VITE_FLUTTERWAVE_PUBLIC_KEY || "FLWPUBK_TEST-SANDBOX-KEY",
+        process.env.FLUTTERWAVE_SECRET_KEY || "FLWSECK_TEST-SANDBOX-KEY"
+      );
+
+      // Verify if payment is non-free
+      if (planId !== 'core' && transaction_id) {
+        const response = await flw.Transaction.verify({ id: transaction_id });
+        if (response.status !== "success") {
+          return res.status(400).json({ error: "Payment verification failed" });
+        }
+      }
+
+      const tierMap: Record<string, string> = {
+        'core': 'free',
+        'catalyst': 'pro',
+        'quantum': 'enterprise'
+      };
+      const tier = tierMap[planId];
+      const now = new Date().toISOString();
+      
+      db.prepare("UPDATE users SET subscriptionTier = ?, subscriptionStatus = 'active', lastPaymentDate = ? WHERE id = ?")
+        .run(tier, now, req.user.id);
+      
+      // Also add some credits
+      const creditBonus = planId === 'quantum' ? 500 : (planId === 'catalyst' ? 100 : 0);
+      if (creditBonus > 0) {
+        db.prepare("UPDATE users SET credits = credits + ? WHERE id = ?").run(creditBonus, req.user.id);
+      }
+
+      // Record the payment
+      const paymentId = Math.random().toString(36).substring(2, 11);
+      const amount = planId === 'quantum' ? 150000 : (planId === 'catalyst' ? 50000 : 0);
+      
+      db.prepare("INSERT INTO payments (id, userId, tier, amount, currency, status, externalId) VALUES (?, ?, ?, ?, ?, ?, ?)")
+        .run(paymentId, req.user.id, tier, amount, 'UGX', 'completed', transaction_id || `SUB-${paymentId}`);
+
+      res.json({ success: true, tier, creditsAdded: creditBonus });
+    } catch (err) {
+      console.error("Subscription error:", err);
+      res.status(500).json({ error: "Failed to process subscription" });
+    }
+  });
+
+  // Flutterwave Webhook
+  app.post("/api/payment/flutterwave/webhook", async (req, res) => {
+    const secretHash = process.env.FLUTTERWAVE_WEBHOOK_HASH;
+    const signature = req.headers['verif-hash'];
+    
+    // Verify signature if secretHash is provided
+    if (secretHash && signature !== secretHash) {
+      console.warn("[WEBHOOK] Invalid Flutterwave signature");
+      return res.status(401).send("Invalid signature");
+    }
+
+    const payload = req.body;
+    console.log("[WEBHOOK] Flutterwave event received:", payload.event);
+
+    if (payload.event === "charge.completed" && payload.data.status === "successful") {
+      const { tx_ref, amount, currency, id: transactionId, customer } = payload.data;
+      
+      try {
+        // Find user by email
+        const user: any = db.prepare("SELECT * FROM users WHERE email = ?").get(customer.email);
+        
+        if (user) {
+          // Logic to determine tier based on amount in UGX
+          let tier = 'pro';
+          if (amount >= 140000) tier = 'enterprise';
+          else if (amount >= 45000) tier = 'pro';
+          else if (amount < 1000) tier = 'free'; // Small trial payments
+          
+          const now = new Date().toISOString();
+          db.prepare("UPDATE users SET subscriptionTier = ?, subscriptionStatus = 'active', lastPaymentDate = ? WHERE id = ?")
+            .run(tier, now, user.id);
+            
+          const paymentId = Math.random().toString(36).substring(2, 11);
+          db.prepare("INSERT INTO payments (id, userId, tier, amount, currency, status, externalId) VALUES (?, ?, ?, ?, ?, ?, ?)")
+            .run(paymentId, user.id, tier, amount, currency, 'completed', transactionId.toString());
+            
+          console.log(`[WEBHOOK] Successfully upgraded user ${user.email} to ${tier} via Webhook`);
+        }
+      } catch (err) {
+        console.error("[WEBHOOK ERROR]", err);
+      }
+    }
+
+    res.status(200).send("Webhook handled");
+  });
+
   app.get("/api/admin/billing/all", authenticate, requireAdmin, (req: any, res) => {
     const page = parseInt(req.query.page as string) || 1;
     const limit = parseInt(req.query.limit as string) || 10;
@@ -854,7 +1008,7 @@ async function startServer() {
 
     try {
       const decoded: any = jwt.verify(token, JWT_SECRET);
-      const user: any = db.prepare("SELECT id, email, displayName, photoURL, role, subscriptionTier, subscriptionStatus, lastPaymentDate, createdAt FROM users WHERE id = ?").get(decoded.id);
+      const user: any = db.prepare("SELECT id, email, displayName, photoURL, role, credits, subscriptionTier, subscriptionStatus, lastPaymentDate, createdAt FROM users WHERE id = ?").get(decoded.id);
       res.json({ user });
     } catch (err) {
       res.json({ user: null });
@@ -1144,16 +1298,96 @@ async function startServer() {
     }
   });
 
+  // Medication Routes
+  app.get("/api/medications", authenticate, (req: any, res) => {
+    try {
+      const medications = db.prepare("SELECT * FROM medications WHERE userId = ? ORDER BY createdAt DESC").all(req.user.id);
+      
+      // For each med, check if taken today
+      const today = new Date().toISOString().split('T')[0];
+      const medsWithStatus = medications.map((med: any) => {
+        const intake = db.prepare("SELECT * FROM medication_intakes WHERE medicationId = ? AND userId = ? AND takenAt >= ?")
+          .get(med.id, req.user.id, today + ' 00:00:00');
+        return { ...med, takenToday: !!intake };
+      });
+      
+      res.json({ medications: medsWithStatus });
+    } catch (err) {
+      res.status(500).json({ error: "Failed to fetch medications" });
+    }
+  });
+
+  app.post("/api/medications", authenticate, (req: any, res) => {
+    const { name, dosage, frequency, time, category, remindersEnabled } = req.body;
+    if (!name) return res.status(400).json({ error: "Medication name required" });
+
+    try {
+      const id = Math.random().toString(36).substring(2, 15);
+      const createdAt = new Date().toISOString();
+      db.prepare("INSERT INTO medications (id, userId, name, dosage, frequency, time, category, remindersEnabled, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)")
+        .run(id, req.user.id, name, dosage, frequency, time, category || 'prescription', remindersEnabled ? 1 : 0, createdAt);
+      
+      res.json({ success: true, medication: { id, name, dosage, frequency, time, category, remindersEnabled, takenToday: false } });
+    } catch (err) {
+      res.status(500).json({ error: "Failed to add medication" });
+    }
+  });
+
+  app.delete("/api/medications/:id", authenticate, (req: any, res) => {
+    try {
+      db.prepare("DELETE FROM medications WHERE id = ? AND userId = ?").run(req.params.id, req.user.id);
+      db.prepare("DELETE FROM medication_intakes WHERE medicationId = ? AND userId = ?").run(req.params.id, req.user.id);
+      res.json({ success: true });
+    } catch (err) {
+      res.status(500).json({ error: "Failed to delete medication" });
+    }
+  });
+
+  app.post("/api/medications/:id/take", authenticate, (req: any, res) => {
+    const { id } = req.params;
+    const { undo } = req.body;
+    const today = new Date().toISOString().split('T')[0];
+
+    try {
+      if (undo) {
+        db.prepare("DELETE FROM medication_intakes WHERE medicationId = ? AND userId = ? AND takenAt >= ?")
+          .run(id, req.user.id, today + ' 00:00:00');
+      } else {
+        const intakeId = Math.random().toString(36).substring(2, 15);
+        db.prepare("INSERT INTO medication_intakes (id, medicationId, userId) VALUES (?, ?, ?)")
+          .run(intakeId, id, req.user.id);
+      }
+      res.json({ success: true });
+    } catch (err) {
+      res.status(500).json({ error: "Failed to update intake status" });
+    }
+  });
+
+  app.patch("/api/medications/:id", authenticate, (req: any, res) => {
+    const { id } = req.params;
+    const { remindersEnabled } = req.body;
+    
+    try {
+      if (remindersEnabled !== undefined) {
+        db.prepare("UPDATE medications SET remindersEnabled = ? WHERE id = ? AND userId = ?")
+          .run(remindersEnabled ? 1 : 0, id, req.user.id);
+      }
+      res.json({ success: true });
+    } catch (err) {
+      res.status(500).json({ error: "Failed to update medication" });
+    }
+  });
+
   app.post("/api/records", authenticate, (req: any, res) => {
-    const { type, value, unit, date, notes } = req.body;
+    const { type, value, unit, date, notes, attachmentURL } = req.body;
     if (!type || !value || !date) return res.status(400).json({ error: "Missing required fields" });
 
     try {
       const id = Math.random().toString(36).substring(2, 15);
-      const stmt = db.prepare("INSERT INTO records (id, userId, type, value, unit, date, notes) VALUES (?, ?, ?, ?, ?, ?, ?)");
-      stmt.run(id, req.user.id, type, value, unit || "", date, notes || "");
+      const stmt = db.prepare("INSERT INTO records (id, userId, type, value, unit, date, notes, attachmentURL) VALUES (?, ?, ?, ?, ?, ?, ?, ?)");
+      stmt.run(id, req.user.id, type, value, unit || "", date, notes || "", attachmentURL || null);
 
-      res.json({ record: { id, userId: req.user.id, type, value, unit, date, notes } });
+      res.json({ record: { id, userId: req.user.id, type, value, unit, date, notes, attachmentURL } });
     } catch (err) {
       res.status(500).json({ error: "Internal server error" });
     }
@@ -1444,6 +1678,124 @@ async function startServer() {
         error: "Deepseek service currently unavailable",
         details: typeof errorData === 'object' ? (errorData.error?.message || JSON.stringify(errorData)) : errorData
       });
+    }
+  });
+
+  // Streaming AI Chat Route (OpenRouter + DeepSeek R1)
+  app.post("/api/ai/chat/stream", authenticate, async (req: any, res) => {
+    const { messages, systemInstruction, modelName, temperature } = req.body;
+    const userId = req.user.id;
+
+    try {
+      // 1. Credit Check
+      const user: any = db.prepare("SELECT credits, subscriptionTier FROM users WHERE id = ?").get(userId);
+      const isPremium = ['gold', 'business', 'silver', 'pro'].includes(user.subscriptionTier);
+
+      if (!isPremium && user.credits <= 0) {
+        return res.status(403).json({ 
+          error: "Low Credits", 
+          message: "You have exhausted your free consultation credits. Please upgrade to continue." 
+        });
+      }
+
+      // 2. Resolve API Key
+      const apiKey = process.env.OPENROUTER_API_KEY || process.env.DEEPSEEK_API_KEY || getCleanApiKey();
+      if (!apiKey) throw new Error("No AI API key found");
+
+      // 3. Set Headers for SSE
+      res.setHeader('Content-Type', 'text/event-stream');
+      res.setHeader('Cache-Control', 'no-cache');
+      res.setHeader('Connection', 'keep-alive');
+
+      // 4. Prepare System Instruction
+      const trustLayer = `
+        MANDATORY DISCLAIMER: I am an AI assistant, not a doctor. This information is for educational purposes and is not formal medical advice. 
+        Always consult a qualified healthcare professional in person for diagnosis or treatment. 
+        In case of a medical emergency, call your local emergency number immediately.
+      `;
+      const finalSystemInstruction = `${systemInstruction}\n\n${trustLayer}`;
+
+      // 5. OpenRouter Request
+      // Using deepseek-r1 as requested
+      const model = modelName || "heavy" ? "deepseek/deepseek-r1" : "deepseek/deepseek-r1:free";
+
+      const orResponse = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${apiKey}`,
+          "Content-Type": "application/json",
+          "HTTP-Referer": process.env.APP_URL || "http://localhost:3000",
+          "X-Title": "Doctorian AI",
+        },
+        body: JSON.stringify({
+          model: "deepseek/deepseek-r1", // Strictly use deepseek-r1 as requested
+          messages: [
+            { role: "system", content: finalSystemInstruction },
+            ...messages.map((m: any) => ({
+              role: m.role === 'bot' || m.role === 'model' ? 'assistant' : 'user',
+              content: m.text
+            }))
+          ],
+          temperature: temperature || 0.6,
+          stream: true,
+        }),
+      });
+
+      if (!orResponse.ok) {
+        const errorText = await orResponse.text();
+        console.error("[STREAM ERROR] OpenRouter:", errorText);
+        return res.status(orResponse.status).end();
+      }
+
+      const reader = orResponse.body?.getReader();
+      if (!reader) throw new Error("No reader found on stream");
+
+      let fullText = "";
+
+      // 6. Stream Processing
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        const chunk = new TextDecoder().decode(value);
+        const lines = chunk.split("\n");
+
+        for (const line of lines) {
+          if (line.startsWith("data: ")) {
+            const dataStr = line.slice(6);
+            if (dataStr === "[DONE]") {
+              res.write("data: [DONE]\n\n");
+              continue;
+            }
+
+            try {
+              const data = JSON.parse(dataStr);
+              const content = data.choices[0]?.delta?.content || "";
+              if (content) {
+                fullText += content;
+                res.write(`data: ${JSON.stringify({ text: content })}\n\n`);
+              }
+            } catch (e) {
+              // Ignore non-json chunks
+            }
+          }
+        }
+      }
+
+      // Deduct credit at the end
+      let finalCredits = user.credits;
+      if (!isPremium) {
+        finalCredits = Math.max(0, user.credits - 1);
+        db.prepare("UPDATE users SET credits = ? WHERE id = ?").run(finalCredits, userId);
+      }
+
+      res.write(`data: ${JSON.stringify({ credits: finalCredits })}\n\n`);
+      res.write("data: [DONE]\n\n");
+      res.end();
+
+    } catch (err: any) {
+      console.error("[STREAM ERROR]:", err);
+      res.status(500).end();
     }
   });
 

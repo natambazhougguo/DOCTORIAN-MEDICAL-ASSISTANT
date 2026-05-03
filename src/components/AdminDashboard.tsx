@@ -887,6 +887,17 @@ export const AdminDashboard: React.FC = () => {
                           {record.notes && (
                             <p className="text-sm text-slate-500 dark:text-slate-400 mt-2 italic">"{record.notes}"</p>
                           )}
+                          {record.attachmentURL && (
+                            <div className="mt-3">
+                              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Attached Diagnostic Image</p>
+                              <img 
+                                src={record.attachmentURL} 
+                                alt="Diagnostic attachment" 
+                                className="w-full max-w-[200px] rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm"
+                                referrerPolicy="no-referrer"
+                              />
+                            </div>
+                          )}
                         </div>
                       </div>
                       <div className="text-right">

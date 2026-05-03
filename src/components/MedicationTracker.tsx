@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
   Pill, 
@@ -10,8 +10,13 @@ import {
   ShieldCheck,
   Calendar,
   ChevronRight,
-  Info
+  Info,
+  Search,
+  Loader2,
+  Bell,
+  BellOff
 } from 'lucide-react';
+import { api } from '../api';
 
 interface Medicine {
   id: string;
@@ -21,36 +26,92 @@ interface Medicine {
   time: string;
   category: 'prescription' | 'supplement';
   takenToday: boolean;
+  remindersEnabled?: boolean;
 }
 
 export const MedicationTracker: React.FC = () => {
   const [isLoading, setIsLoading] = React.useState(true);
-  const [meds, setMeds] = useState<Medicine[]>(() => {
-    const saved = localStorage.getItem('doctorian_meds');
-    return saved ? JSON.parse(saved) : [
-      { id: '1', name: 'Omega-3 Cognis', dosage: '1000mg', frequency: 'Daily', time: '08:00', category: 'supplement', takenToday: true },
-      { id: '2', name: 'Metabolic Balance', dosage: '500mg', frequency: 'Bi-daily', time: '20:00', category: 'prescription', takenToday: false },
-    ];
-  });
+  const [meds, setMeds] = useState<Medicine[]>([]);
 
   const [isAdding, setIsAdding] = useState(false);
-  const [newMed, setNewMed] = useState({ name: '', dosage: '', frequency: 'Daily', time: '08:00', category: 'prescription' as const });
+  const [showLibrary, setShowLibrary] = useState(false);
+  const [newMed, setNewMed] = useState({ 
+    name: '', 
+    dosage: '', 
+    frequency: 'Daily', 
+    time: '08:00', 
+    category: 'prescription' as const,
+    remindersEnabled: true 
+  });
 
-  React.useEffect(() => {
-    const timer = setTimeout(() => setIsLoading(false), 1200);
-    return () => clearTimeout(timer);
+  const commonMeds = [
+    { name: 'Paracetamol', dosage: '500mg', frequency: 'Every 6 hours', category: 'supplement' },
+    { name: 'Amoxicillin', dosage: '500mg', frequency: '3 times daily', category: 'prescription' },
+    { name: 'Metformin', dosage: '500mg', frequency: 'Twice daily', category: 'prescription' },
+    { name: 'Atorvastatin', dosage: '20mg', frequency: 'Nightly', category: 'prescription' },
+    { name: 'Ibuprofen', dosage: '400mg', frequency: 'Every 8 hours', category: 'supplement' },
+    { name: 'Omeprazole', dosage: '20mg', frequency: 'Daily (Morning)', category: 'prescription' },
+    { name: 'Amlodipine', dosage: '5mg', frequency: 'Daily', category: 'prescription' },
+  ];
+
+  useEffect(() => {
+    fetchMeds();
   }, []);
 
-  const handleAddMed = (e: React.FormEvent) => {
+  const fetchMeds = async () => {
+    setIsLoading(true);
+    try {
+      const data = await api.medications.list();
+      setMeds(data);
+    } catch (err) {
+      console.error("Failed to fetch meds:", err);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleAddMed = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newMed.name) return;
-    const med: Medicine = {
-      id: Math.random().toString(36).substr(2, 9),
-      ...newMed,
-      takenToday: false
-    };
-    setMeds([med, ...meds]);
-    setIsAdding(false);
+    try {
+      const med = await api.medications.create(newMed);
+      setMeds([med, ...meds]);
+      setIsAdding(false);
+      setShowLibrary(false);
+      setNewMed({ name: '', dosage: '', frequency: 'Daily', time: '08:00', category: 'prescription', remindersEnabled: true });
+    } catch (err) {
+      console.error("Failed to add med:", err);
+    }
+  };
+
+  const handleTakeStatus = async (id: string, currentlyTaken: boolean) => {
+    try {
+      await api.medications.take(id, currentlyTaken);
+      setMeds(meds.map(m => m.id === id ? { ...m, takenToday: !currentlyTaken } : m));
+    } catch (err) {
+      console.error("Failed to update intake status:", err);
+    }
+  };
+
+  const handleDeleteMed = async (id: string) => {
+    try {
+      await api.medications.delete(id);
+      setMeds(meds.filter(m => m.id !== id));
+    } catch (err) {
+      console.error("Failed to delete med:", err);
+    }
+  };
+
+  const toggleReminders = async (id: string, currentStatus: boolean) => {
+    try {
+      const newStatus = !currentStatus;
+      setMeds(meds.map(m => m.id === id ? { ...m, remindersEnabled: newStatus } : m));
+      await api.medications.update(id, { remindersEnabled: newStatus });
+    } catch (err) {
+      console.error("Failed to toggle reminders:", err);
+      // Revert local state on error
+      setMeds(meds.map(m => m.id === id ? { ...m, remindersEnabled: currentStatus } : m));
+    }
   };
 
   if (isLoading) {
@@ -112,6 +173,13 @@ export const MedicationTracker: React.FC = () => {
                       <Pill size={24} />
                     </div>
                     <div className="flex gap-2">
+                       <button 
+                        onClick={() => toggleReminders(med.id, !!med.remindersEnabled)} 
+                        className={`p-2 rounded-lg transition-colors ${med.remindersEnabled ? 'text-blue-500 bg-blue-50 dark:bg-blue-900/20' : 'text-slate-300 hover:text-slate-500'}`}
+                        title={med.remindersEnabled ? 'Reminders On' : 'Reminders Off'}
+                       >
+                         {med.remindersEnabled ? <Bell size={14} /> : <BellOff size={14} />}
+                       </button>
                        <span className={`text-[8px] font-black uppercase px-2 py-1 rounded-md tracking-tighter ${med.takenToday ? 'bg-emerald-500 text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-400'}`}>
                          {med.takenToday ? 'SYNCHRONIZED' : 'PENDING'}
                        </span>
@@ -128,7 +196,7 @@ export const MedicationTracker: React.FC = () => {
                     <span className="text-[10px] font-black uppercase">{med.time}</span>
                   </div>
                   <button 
-                    onClick={() => setMeds(meds.map(m => m.id === med.id ? {...m, takenToday: !m.takenToday} : m))}
+                    onClick={() => handleTakeStatus(med.id, !!med.takenToday)}
                     className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${
                       med.takenToday 
                       ? 'bg-emerald-50 text-emerald-600' 
@@ -140,7 +208,7 @@ export const MedicationTracker: React.FC = () => {
                 </div>
 
                 <button 
-                  onClick={() => setMeds(meds.filter(m => m.id !== med.id))}
+                  onClick={() => handleDeleteMed(med.id)}
                   className="absolute top-4 right-4 p-2 text-slate-200 hover:text-rose-500 opacity-0 group-hover:opacity-100 transition-all"
                 >
                   <Trash2 size={16} />
@@ -196,31 +264,79 @@ export const MedicationTracker: React.FC = () => {
               initial={{ opacity: 0, scale: 0.9 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.9 }}
-              className="bg-white dark:bg-slate-900 w-full max-w-lg rounded-[3rem] p-10 border border-slate-100 dark:border-slate-800 shadow-2xl"
+              className="bg-white dark:bg-slate-900 w-full max-w-lg rounded-[3rem] p-10 border border-slate-100 dark:border-slate-800 shadow-2xl max-h-[90vh] overflow-y-auto"
             >
-               <h2 className="text-3xl font-black uppercase tracking-tighter mb-8">Register <span className="text-rose-600">Molecule</span></h2>
-               <form onSubmit={handleAddMed} className="space-y-6">
-                  <div>
-                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Molecular Name</label>
-                    <input 
-                      type="text" 
-                      required
-                      placeholder="e.g. Lipitor 20mg"
-                      className="w-full mt-2 px-6 py-4 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl focus:outline-none focus:border-rose-500 font-bold"
-                      value={newMed.name}
-                      onChange={(e) => setNewMed({...newMed, name: e.target.value})}
-                    />
-                  </div>
-                  <div className="grid grid-cols-2 gap-4">
+               <div className="flex items-center justify-between mb-8">
+                <h2 className="text-3xl font-black uppercase tracking-tighter">Register <span className="text-rose-600">Molecule</span></h2>
+                <button 
+                  onClick={() => setShowLibrary(!showLibrary)}
+                  className="text-[10px] font-black text-blue-600 uppercase tracking-widest flex items-center gap-1 hover:underline"
+                >
+                  <Search size={14} />
+                  {showLibrary ? 'Custom Entry' : 'Molecular Library'}
+                </button>
+               </div>
+
+               {showLibrary ? (
+                 <div className="space-y-3 mb-8">
+                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4">Select from common molecules</p>
+                    <div className="grid grid-cols-1 gap-2">
+                       {commonMeds.map((m, idx) => (
+                         <button
+                          key={idx}
+                          onClick={() => {
+                            setNewMed({...newMed, name: m.name, dosage: m.dosage, frequency: m.frequency, category: m.category as any});
+                            setShowLibrary(false);
+                          }}
+                          className="flex items-center justify-between p-4 bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-2xl transition-all text-left"
+                         >
+                           <div>
+                             <p className="text-sm font-black text-slate-900 dark:text-white uppercase">{m.name}</p>
+                             <p className="text-[10px] font-bold text-slate-400 uppercase">{m.dosage} • {m.frequency}</p>
+                           </div>
+                           <Plus size={16} className="text-slate-300" />
+                         </button>
+                       ))}
+                    </div>
+                 </div>
+               ) : (
+                 <form onSubmit={handleAddMed} className="space-y-6">
                     <div>
-                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Dosage</label>
+                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Molecular Name</label>
                       <input 
                         type="text" 
-                        placeholder="e.g. 500mg"
+                        required
+                        placeholder="e.g. Lipitor 20mg"
                         className="w-full mt-2 px-6 py-4 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl focus:outline-none focus:border-rose-500 font-bold"
-                        value={newMed.dosage}
-                        onChange={(e) => setNewMed({...newMed, dosage: e.target.value})}
+                        value={newMed.name}
+                        onChange={(e) => setNewMed({...newMed, name: e.target.value})}
                       />
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Dosage</label>
+                        <input 
+                          type="text" 
+                          placeholder="e.g. 500mg"
+                          className="w-full mt-2 px-6 py-4 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl focus:outline-none focus:border-rose-500 font-bold"
+                          value={newMed.dosage}
+                          onChange={(e) => setNewMed({...newMed, dosage: e.target.value})}
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Frequency</label>
+                        <select 
+                          className="w-full mt-2 px-6 py-4 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl focus:outline-none focus:border-rose-500 font-bold appearance-none"
+                          value={newMed.frequency}
+                          onChange={(e) => setNewMed({...newMed, frequency: e.target.value})}
+                        >
+                          <option>Daily</option>
+                          <option>Twice Daily</option>
+                          <option>3 Times Daily</option>
+                          <option>Every 8 Hours</option>
+                          <option>Weekly</option>
+                        </select>
+                      </div>
                     </div>
                     <div>
                       <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Target Time</label>
@@ -231,12 +347,22 @@ export const MedicationTracker: React.FC = () => {
                         onChange={(e) => setNewMed({...newMed, time: e.target.value})}
                       />
                     </div>
-                  </div>
-                  <div className="flex gap-3 pt-6">
-                    <button type="button" onClick={() => setIsAdding(false)} className="flex-1 py-4 font-black uppercase text-xs tracking-widest text-slate-400 hover:text-slate-600">Cancel</button>
-                    <button type="submit" className="flex-2 bg-rose-600 text-white py-4 rounded-2xl font-black uppercase text-xs tracking-widest shadow-xl">Complete Registration</button>
-                  </div>
-               </form>
+                    <div className="flex items-center gap-3 p-4 bg-slate-50 dark:bg-slate-800 rounded-2xl">
+                      <button 
+                        type="button"
+                        onClick={() => setNewMed({...newMed, remindersEnabled: !newMed.remindersEnabled})}
+                        className={`w-10 h-6 rounded-full p-1 transition-all ${newMed.remindersEnabled ? 'bg-blue-600' : 'bg-slate-300'}`}
+                      >
+                        <div className={`w-4 h-4 bg-white rounded-full transition-all ${newMed.remindersEnabled ? 'ml-4' : 'ml-0'}`} />
+                      </button>
+                      <span className="text-[10px] font-black text-slate-900 dark:text-white uppercase tracking-widest">Enable Cellular Alerts</span>
+                    </div>
+                    <div className="flex gap-3 pt-6">
+                      <button type="button" onClick={() => setIsAdding(false)} className="flex-1 py-4 font-black uppercase text-xs tracking-widest text-slate-400 hover:text-slate-600">Cancel</button>
+                      <button type="submit" className="flex-2 bg-rose-600 text-white py-4 rounded-2xl font-black uppercase text-xs tracking-widest shadow-xl">Complete Registration</button>
+                    </div>
+                 </form>
+               )}
             </motion.div>
           </div>
         )}

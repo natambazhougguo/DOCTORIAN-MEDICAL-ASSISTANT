@@ -7,7 +7,7 @@ export interface User {
   role: string;
   credits: number;
   institutionId?: string;
-  subscriptionTier: 'free' | 'silver' | 'gold' | 'pro' | 'business';
+  subscriptionTier: 'free' | 'silver' | 'gold' | 'pro' | 'business' | 'enterprise';
   subscriptionStatus?: 'active' | 'expired' | 'none' | 'pending';
   lastPaymentDate?: string;
   createdAt: string;
@@ -21,6 +21,7 @@ export interface HealthRecord {
   unit?: string;
   date: string;
   notes?: string;
+  attachmentURL?: string;
 }
 
 const API_BASE = "/api";
@@ -166,7 +167,7 @@ export const api = {
       if (!res.ok) throw new Error(data.error || "Social login failed");
       return data.user as User;
     },
-    async upgradeSubscription(tier: 'silver' | 'gold', amount: number, evidence?: string) {
+    async upgradeSubscription(tier: string, amount: number, evidence?: string) {
       const res = await fetch(`${API_BASE}/auth/subscription/upgrade`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -244,6 +245,17 @@ export const api = {
     },
     exportUrl() {
       return `${API_BASE}/billing/export`;
+    },
+    async subscribe(planId: string, transaction_id?: string) {
+      const res = await fetch(`${API_BASE}/billing/subscribe`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ planId, transaction_id }),
+        credentials: "include",
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to process subscription");
+      return data as { success: boolean, tier: string, creditsAdded: number };
     }
   },
   notifications: {
@@ -295,6 +307,58 @@ export const api = {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed to create record");
       return data.record as HealthRecord;
+    }
+  },
+  medications: {
+    async list() {
+      const res = await fetch(`${API_BASE}/medications`, {
+        credentials: "include",
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to fetch medications");
+      return data.medications as any[];
+    },
+    async create(med: any) {
+      const res = await fetch(`${API_BASE}/medications`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(med),
+        credentials: "include",
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to add medication");
+      return data.medication;
+    },
+    async delete(id: string) {
+      const res = await fetch(`${API_BASE}/medications/${id}`, {
+        method: "DELETE",
+        credentials: "include",
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to delete medication");
+      return data.success;
+    },
+    async take(id: string, undo: boolean = false) {
+      const res = await fetch(`${API_BASE}/medications/${id}/take`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ undo }),
+        credentials: "include",
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to log intake");
+      return data.success;
+    },
+    async update(id: string, updates: any) {
+      const res = await fetch(`${API_BASE}/medications/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(updates),
+        credentials: "include",
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to update medication");
+      return data.success;
     }
   },
   alerts: {
@@ -369,10 +433,48 @@ export const api = {
       if (!res.ok) throw new Error(data.error || "AI Voice call failed");
       return data as { text: string };
     },
-    async *geminiChatStream(messages: { role: string; text: string }[], systemInstruction: string, model: string, temperature: number) {
-      // NOTE: Streaming is disabled to support credit deduction and response injection synchronously
-      const result = await this.geminiChat(messages, systemInstruction, model, temperature);
-      yield result.text;
+    async *geminiChatStream(messages: { role: string; text: string }[], systemInstruction: string, model: string, temperature: number, onMetadata?: (meta: any) => void) {
+      const res = await fetch(`${API_BASE}/ai/chat/stream`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ 
+          messages, 
+          systemInstruction, 
+          modelName: model, 
+          temperature 
+        }),
+        credentials: "include",
+      });
+
+      if (!res.ok) {
+        const error = await res.json().catch(() => ({ error: "Stream connection failed" }));
+        throw new Error(error.message || error.error || "Streaming failed");
+      }
+
+      const reader = res.body?.getReader();
+      if (!reader) throw new Error("No reader available");
+
+      const decoder = new TextDecoder();
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        const chunk = decoder.decode(value);
+        const lines = chunk.split("\n");
+        for (const line of lines) {
+          if (line.startsWith("data: ")) {
+            const dataStr = line.slice(6);
+            if (dataStr === "[DONE]") return;
+            try {
+              const data = JSON.parse(dataStr);
+              if (data.text) yield data.text;
+              if (data.credits !== undefined && onMetadata) onMetadata(data);
+            } catch (e) {
+              // Ignore parse errors
+            }
+          }
+        }
+      }
     },
     async deepseekChat(messages: { role: string; text: string }[], systemInstruction: string) {
       const res = await fetch(`${API_BASE}/chat/deepseek`, {

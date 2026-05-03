@@ -25,6 +25,16 @@ export function NeuralVoiceCall({ onClose, user }: NeuralVoiceCallProps) {
   const audioContextRef = useRef<AudioContext | null>(null);
 
   useEffect(() => {
+    // Initial accessibility greeting
+    if (status === 'idle') {
+      const timer = setTimeout(() => {
+        speak("Welcome to Neural Voice Call. Click or tap the center of the screen to initiate a consultation session.");
+      }, 1000);
+      return () => clearTimeout(timer);
+    }
+  }, []);
+
+  useEffect(() => {
     let interval: any;
     if (status === 'connected') {
       interval = setInterval(() => {
@@ -42,8 +52,10 @@ export function NeuralVoiceCall({ onClose, user }: NeuralVoiceCallProps) {
 
   const startCall = () => {
     setStatus('calling');
+    speak("Initiating secure neural link. Please wait.");
     setTimeout(() => {
       setStatus('connected');
+      speak("System connected. I am listening. How can I assist you today?");
       initializeSpeech();
     }, 2000);
   };
@@ -90,9 +102,14 @@ export function NeuralVoiceCall({ onClose, user }: NeuralVoiceCallProps) {
   };
 
   const speak = (text: string) => {
-    if (isSpeakerOff) return;
+    if (isSpeakerOff || !('speechSynthesis' in window)) return;
+    window.speechSynthesis.cancel();
     const utterance = new SpeechSynthesisUtterance(text);
-    utterance.voice = window.speechSynthesis.getVoices().find(v => v.name.includes('Google') || v.name.includes('Male')) || null;
+    const voices = window.speechSynthesis.getVoices();
+    // Prefer a clear natural voice
+    utterance.voice = voices.find(v => v.name.includes('Google') || v.name.includes('Natural') || v.name.includes('Male')) || voices[0];
+    utterance.rate = 0.95; // Slightly slower for better clarity
+    utterance.pitch = 1.0;
     window.speechSynthesis.speak(utterance);
   };
 
@@ -117,9 +134,13 @@ export function NeuralVoiceCall({ onClose, user }: NeuralVoiceCallProps) {
 
   const endCall = () => {
     if (recognitionRef.current) recognitionRef.current.stop();
-    setStatus('idle');
-    setCallDuration(0);
-    onClose();
+    window.speechSynthesis.cancel();
+    speak("Consultation ended. Secure link terminated.");
+    setTimeout(() => {
+      setStatus('idle');
+      setCallDuration(0);
+      onClose();
+    }, 1500);
   };
 
   return (

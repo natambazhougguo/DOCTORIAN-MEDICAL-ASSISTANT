@@ -819,7 +819,7 @@ Verified by Joseph Akora - Development Lead.
                     <span className="text-[10px] font-black text-blue-400 uppercase tracking-widest block mb-2">Consultation Bank</span>
                     <div className="flex items-baseline gap-2">
                       <h4 className="text-4xl font-black tracking-tighter">
-                        {user.subscriptionTier === 'pro' || user.subscriptionTier === 'business' || user.subscriptionTier === 'gold' || user.subscriptionTier === 'silver' ? '∞' : user.credits || 0}
+                        {['pro', 'enterprise', 'business', 'gold', 'silver'].includes(user.subscriptionTier) ? '∞' : user.credits || 0}
                       </h4>
                       <span className="text-xs font-bold text-slate-400 uppercase">Credits</span>
                     </div>
@@ -836,8 +836,8 @@ Verified by Joseph Akora - Development Lead.
                   <div>
                     <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-2">Active Protocol</span>
                     <h4 className="text-lg font-black text-slate-900 dark:text-white uppercase tracking-tight flex items-center gap-2">
-                       {user.subscriptionTier === 'pro' || user.subscriptionTier === 'silver' ? <Zap className="text-blue-500" size={18} /> : user.subscriptionTier === 'business' || user.subscriptionTier === 'gold' ? <Crown className="text-amber-500" size={18} /> : <Activity className="text-slate-400" size={18} />}
-                       {(user.subscriptionTier || 'Standard').toUpperCase()}
+                       {['pro', 'silver'].includes(user.subscriptionTier) ? <Zap className="text-blue-500" size={18} /> : ['enterprise', 'business', 'gold'].includes(user.subscriptionTier) ? <Crown className="text-amber-500" size={18} /> : <Activity className="text-slate-400" size={18} />}
+                       {(user.subscriptionTier === 'pro' ? 'Catalyst Pro' : user.subscriptionTier === 'enterprise' ? 'Quantum Elite' : user.subscriptionTier || 'Standard').toUpperCase()}
                     </h4>
                     <p className={`text-[10px] font-bold mt-2 uppercase ${user.subscriptionStatus === 'active' ? 'text-emerald-500' : 'text-rose-500'}`}>
                       Sync Status: {user.subscriptionStatus?.toUpperCase() || 'OFFLINE'}

@@ -76,7 +76,10 @@ import {
   Image as ImageIcon,
   Pill,
   ArrowLeft,
-  ChevronDown
+  ChevronDown,
+  Crown,
+  CreditCard,
+  PhoneCall
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import React, { useState, useEffect } from 'react';
@@ -86,6 +89,7 @@ import { AuthModal } from './components/AuthModal';
 import { AdminInfoModal } from './components/AdminInfoModal';
 import { ResourceView, ResourceType } from './components/ResourceView';
 import { startRegistration } from '@simplewebauthn/browser';
+import { useArduino } from './hooks/useArduino';
 
 const SEARCHABLE_ITEMS = [
   { label: 'Heart Rate Bio-Monitor', view: 'monitor', icon: <Activity size={18} />, category: 'Tools', description: 'Real-time heart rate and vitals monitoring.' },
@@ -200,6 +204,9 @@ export default function App() {
   const [isTipModalOpen, setIsTipModalOpen] = useState(false);
   const [dailyTip, setDailyTip] = useState<HealthTip>(HEALTH_TIPS[0]);
   const [isResourcesOpen, setIsResourcesOpen] = useState(false);
+  const [weatherData, setWeatherData] = useState<any>(null);
+
+  const arduino = useArduino();
 
   // All Effects
   useEffect(() => {
@@ -241,6 +248,28 @@ export default function App() {
   useEffect(() => {
     const dayOfYear = Math.floor((Date.now() - new Date(new Date().getFullYear(), 0, 0).getTime()) / 86400000);
     setDailyTip(HEALTH_TIPS[dayOfYear % HEALTH_TIPS.length]);
+  }, []);
+
+  useEffect(() => {
+    const fetchWeather = () => {
+      if (!navigator.geolocation) return;
+      navigator.geolocation.getCurrentPosition(async (pos) => {
+        try {
+          const { latitude, longitude } = pos.coords;
+          const res = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}&current_weather=true`);
+          const data = await res.json();
+          setWeatherData({
+            temp: data.current_weather.temperature,
+            condition: data.current_weather.weathercode,
+            latitude,
+            longitude
+          });
+        } catch (err) {
+          console.error("App-level weather fetch failed:", err);
+        }
+      });
+    };
+    fetchWeather();
   }, []);
 
   useEffect(() => {
@@ -323,7 +352,7 @@ export default function App() {
     if (user && currentView === 'home' && !aiInsight) {
       fetchAiInsight();
     }
-  }, [user, currentView, aiInsight]);
+  }, [user, currentView, aiInsight, weatherData]);
 
   useEffect(() => {
     const checkAuth = async () => {
@@ -338,6 +367,23 @@ export default function App() {
     };
     checkAuth();
   }, []);
+
+  const handleSearch = (query: string) => {
+    setSearchQuery(query);
+  };
+
+  const installApp = async () => {
+    if (!deferredPrompt) {
+      // For iOS/Other, show a hint
+      setToast({ message: 'To install, use your browser menu and "Add to Home Screen"', type: 'info' });
+      return;
+    }
+    deferredPrompt.prompt();
+    const { outcome } = await deferredPrompt.userChoice;
+    console.log(`User response to the install prompt: ${outcome}`);
+    setDeferredPrompt(null);
+    setShowInstallButton(false);
+  };
 
   const handleLogout = async () => {
     try {
@@ -354,9 +400,15 @@ export default function App() {
     if (isInsightLoading && retryCount === 0) return;
     setIsInsightLoading(true);
     try {
+      let prompt = "Provide a concise, professional daily health tip or insight for a medical app user. Focus on wellness, nutrition, or preventive care. Keep it under 2 sentences.";
+      
+      if (weatherData) {
+        prompt += ` Current weather is ${weatherData.temp}°C with condition code ${weatherData.condition}. Contextualize the advice based on this environment if applicable (e.g., hydration for heat, joint care for cold/rain, etc).`;
+      }
+
       // Use server-side Gemini call instead of client-side
       const response = await api.ai.geminiChat(
-        [{ role: "user", text: "Provide a concise, professional daily health tip or insight for a medical app user. Focus on wellness, nutrition, or preventive care. Keep it under 2 sentences." }], 
+        [{ role: "user", text: prompt }], 
         "You are a helpful medical assistant.",
         "gemini-1.5-flash", 
         0.7
@@ -528,50 +580,48 @@ export default function App() {
 
 
   return (
-    <div className="h-screen bg-[#f8fafc] dark:bg-slate-950 font-sans text-slate-900 dark:text-slate-100 selection:bg-blue-100 dark:selection:bg-blue-900 selection:text-blue-900 dark:selection:text-blue-100 transition-colors duration-300 flex flex-row overflow-hidden">
+    <div className="h-screen bg-[#f8fafc] dark:bg-slate-950 font-sans text-slate-900 dark:text-slate-100 selection:bg-blue-100 dark:selection:bg-blue-900 selection:text-blue-900 dark:selection:text-blue-100 transition-colors duration-300 flex flex-col lg:flex-row overflow-hidden">
       <a 
         href="#main-content" 
         className="sr-only focus:not-sr-only focus:fixed focus:top-4 focus:left-4 focus:z-[150] focus:px-6 focus:py-3 focus:bg-blue-600 focus:text-white focus:rounded-2xl focus:font-black focus:shadow-2xl"
       >
         Skip to main content
       </a>
-      {/* Sidebar - Floating and Persistent on all devices */}
+      
+      {/* Sidebar - Desktop Only */}
       <aside 
-        className="flex flex-col w-20 sm:w-24 lg:w-56 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 my-2 sm:my-4 ml-2 sm:ml-4 rounded-3xl sm:rounded-[2.5rem] sticky top-2 sm:top-4 h-[calc(100vh-1rem)] sm:h-[calc(100vh-2rem)] z-50 shrink-0 transition-all duration-300 shadow-2xl shadow-slate-200/50 dark:shadow-slate-950/50"
+        className="hidden lg:flex flex-col w-56 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 my-4 ml-4 rounded-[2.5rem] sticky top-4 h-[calc(100vh-2rem)] z-50 shrink-0 transition-all duration-300 shadow-2xl shadow-slate-200/50 dark:shadow-slate-950/50"
         aria-label="Sidebar navigation"
       >
-        <nav className="flex-1 px-1 sm:px-2 lg:px-4 py-8 space-y-1 sm:space-y-3 overflow-y-auto custom-scrollbar pb-6 scrollbar-hide" aria-label="Main navigation">
-          <p className="hidden lg:block px-4 text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-[0.2em] mb-4 text-high-visibility">Main Matrix</p>
+        <nav className="flex-1 px-4 py-8 space-y-3 overflow-y-auto custom-scrollbar pb-6 scrollbar-hide" aria-label="Main navigation">
+          <p className="px-4 text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-[0.2em] mb-4 text-high-visibility">Main Matrix</p>
           {allNavLinks.map((link) => (
             <button 
               key={link.id}
               onClick={() => setCurrentView(link.id as any)}
               title={link.label}
-              className={`w-full flex flex-col lg:flex-row items-center gap-1.5 lg:gap-3 px-2 sm:px-3 lg:px-4 py-4 lg:py-3 rounded-2xl sm:rounded-3xl text-[9px] sm:text-[11px] lg:text-sm font-bold transition-all hover:scale-105 active:scale-95 ${
+              className={`w-full flex items-center gap-3 px-4 py-3 rounded-3xl text-sm font-bold transition-all hover:scale-110 active:scale-95 ${
                 currentView === link.id 
                   ? (link.id === 'admin' ? 'bg-purple-600 text-white shadow-xl shadow-purple-200/50' : 'bg-blue-600 text-white shadow-xl shadow-blue-200/50') 
                   : 'text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-white'
               }`}
             >
               <div className="shrink-0">{React.cloneElement(link.icon as any, { size: 20 })}</div>
-              <span className="hidden lg:inline flex-1 text-left truncate text-high-visibility">{link.label}</span>
-              <span className="lg:hidden text-[8px] font-black uppercase tracking-tighter truncate max-w-full text-center">{link.label.split(' ')[0]}</span>
+              <span className="flex-1 text-left truncate text-high-visibility font-black">{link.label}</span>
             </button>
           ))}
           
-          {/* Resource Menu with Dropdown */}
-          <div className="pt-4 sm:pt-6 mt-4 sm:mt-6 border-t border-slate-50 dark:border-slate-800 px-1 sm:px-2">
+          <div className="pt-6 mt-6 border-t border-slate-50 dark:border-slate-800 px-2">
             <button 
               onClick={() => setIsResourcesOpen(!isResourcesOpen)}
-              className="w-full flex items-center justify-center lg:justify-between px-1 text-[8px] sm:text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-[0.2em] mb-2 hover:text-slate-900 dark:hover:text-white transition-colors"
+              className="w-full flex items-center justify-between px-1 text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-[0.2em] mb-2 hover:text-slate-900 dark:hover:text-white transition-colors"
             >
-              <span className="hidden lg:inline">Resources</span>
+              <span>Resources</span>
               <motion.div
                 animate={{ rotate: isResourcesOpen ? 180 : 0 }}
                 transition={{ duration: 0.3 }}
-                className="block"
               >
-                <ChevronDown size={10} className="sm:size-12" />
+                <ChevronDown size={12} />
               </motion.div>
             </button>
             
@@ -592,39 +642,75 @@ export default function App() {
                   ].map((res) => (
                     <button 
                       key={res.id}
-                      onClick={() => setCurrentView(res.id as ResourceType)}
-                      title={res.label}
-                      className={`w-full flex flex-col lg:flex-row items-center gap-1 lg:gap-3 px-1 sm:px-2 lg:px-4 py-2.5 rounded-xl text-[7px] sm:text-[8px] lg:text-xs font-bold transition-all ${
-                        currentView === res.id 
-                          ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 shadow-sm' 
-                          : 'text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-white'
-                      }`}
+                      onClick={() => setCurrentView(res.id as any)}
+                      className="w-full flex items-center gap-3 px-4 py-2 rounded-2xl text-xs font-bold text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-800 transition-all font-black uppercase text-[9px] tracking-tight"
                     >
-                      <span className="opacity-70 group-hover:opacity-100 transition-opacity">
-                        {res.icon}
-                      </span>
-                      <span className="hidden lg:inline">{res.label}</span>
+                      {res.icon}
+                      <span>{res.label}</span>
                     </button>
                   ))}
                 </motion.div>
               )}
             </AnimatePresence>
           </div>
+
+          {showInstallButton && !isStandalone && (
+            <div className="px-4 pt-4">
+              <button 
+                onClick={installApp}
+                className="w-full flex items-center gap-3 px-6 py-4 rounded-[1.5rem] bg-gradient-to-br from-indigo-600 to-blue-700 text-white shadow-xl shadow-blue-500/20 hover:scale-105 active:scale-95 transition-all group"
+              >
+                <div className="p-2 bg-white/20 rounded-xl group-hover:rotate-12 transition-transform">
+                  <Download size={18} />
+                </div>
+                <div className="flex flex-col items-start leading-none">
+                  <span className="text-[10px] font-black uppercase tracking-widest opacity-70">App Ready</span>
+                  <span className="text-xs font-black">Install Now</span>
+                </div>
+              </button>
+            </div>
+          )}
         </nav>
 
-        <div className="p-1 sm:p-2 lg:p-4 mt-auto border-t border-slate-50 dark:border-slate-800">
-          <div className="bg-slate-50 dark:bg-slate-800/50 rounded-xl sm:rounded-2xl lg:rounded-3xl p-1 sm:p-2 lg:p-4 border border-slate-100 dark:border-slate-800 flex flex-col items-center lg:items-start gap-2">
+        <div className="p-4 mt-auto border-t border-slate-50 dark:border-slate-800">
+          <div className="bg-slate-50 dark:bg-slate-800/50 rounded-3xl p-4 border border-slate-100 dark:border-slate-800 flex flex-col items-start gap-2">
             <div className="flex items-center gap-2">
-              <div className="w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full bg-emerald-500 animate-pulse" />
-              <span className="hidden lg:inline text-[10px] font-bold text-slate-600 dark:text-slate-300">Active</span>
+              <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+              <span className="text-[10px] font-bold text-slate-600 dark:text-slate-300 uppercase tracking-widest">Active System</span>
             </div>
             <div className="flex items-center gap-2">
-              <div className={`w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full ${isOffline ? 'bg-amber-500' : 'bg-emerald-500'}`} />
-              <span className="hidden lg:inline text-[10px] font-bold text-slate-600 dark:text-slate-300">{isOffline ? 'Offline' : 'Connected'}</span>
+              <div className={`w-2 h-2 rounded-full ${isOffline ? 'bg-amber-500' : 'bg-emerald-500'}`} />
+              <span className="text-[10px] font-bold text-slate-600 dark:text-slate-300 uppercase tracking-widest">{isOffline ? 'Offline Mode' : 'Connected'}</span>
             </div>
           </div>
         </div>
       </aside>
+
+      {/* Mobile Bottom Navigation */}
+      <nav className="lg:hidden fixed bottom-6 left-6 right-6 z-[100] h-20 bg-white/80 dark:bg-slate-900/80 backdrop-blur-3xl rounded-[2.5rem] border border-slate-200/50 dark:border-slate-800/50 shadow-[0_20px_50px_rgba(0,0,0,0.2)] flex items-center justify-around px-4">
+        {[
+          { id: 'home', icon: <Home size={22} />, label: 'Home' },
+          { id: 'monitor', icon: <Activity size={22} />, label: 'Monitor' },
+          { id: 'ai_nexus', icon: <Bot size={22} />, label: 'Nexus' },
+          { id: 'emergency', icon: <PhoneCall size={22} />, label: 'Alarm' },
+          { id: 'profile', icon: <UserIcon size={22} />, label: 'Self' }
+        ].map((item) => (
+          <button
+            key={item.id}
+            onClick={() => setCurrentView(item.id as any)}
+            className={`flex flex-col items-center gap-1 transition-all ${
+              currentView === item.id 
+                ? 'text-blue-600 scale-110' 
+                : 'text-slate-400 opacity-60'
+            }`}
+          >
+            <div className={`p-2 rounded-xl transition-all ${currentView === item.id ? 'bg-blue-50 dark:bg-blue-900/30' : ''}`}>
+              {item.icon}
+            </div>
+            <span className="text-[8px] font-black uppercase tracking-tighter">{item.label}</span>
+          </button>
+        ))}
+      </nav>
 
       <div className="flex-1 flex flex-col h-full min-h-0 overflow-y-auto overflow-x-hidden custom-scrollbar relative bg-slate-50 dark:bg-slate-950">
         <div className="w-full flex flex-col min-h-full px-2 sm:px-6 lg:px-8">
@@ -638,6 +724,42 @@ export default function App() {
               className="bg-amber-500 text-white text-[10px] font-black uppercase tracking-[0.2em] py-2 text-center sticky top-0 z-[60] shadow-lg"
             >
               Offline Mode — Some AI features may be limited
+            </motion.div>
+          )}
+        </AnimatePresence>
+        
+        {/* PWA Install Banner (Mobile Only) */}
+        <AnimatePresence>
+          {showInstallButton && !isStandalone && (
+            <motion.div 
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: 'auto', opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              className="lg:hidden bg-gradient-to-r from-blue-600 to-indigo-700 py-3 px-4 sm:px-6 flex items-center justify-between sticky top-0 z-[60] shadow-lg"
+            >
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-white/20 rounded-xl">
+                  <Download size={14} className="text-white" />
+                </div>
+                <div>
+                  <p className="text-[10px] font-black text-white/70 uppercase tracking-widest leading-none mb-1">Fast Access</p>
+                  <p className="text-xs font-black text-white leading-none">Install Doctorian AI</p>
+                </div>
+              </div>
+              <div className="flex gap-2 shrink-0">
+                <button 
+                  onClick={() => setShowInstallButton(false)}
+                  className="px-3 py-2 rounded-xl text-[10px] font-black text-white/60 uppercase tracking-widest hover:bg-white/10"
+                >
+                  Later
+                </button>
+                <button 
+                  onClick={installApp}
+                  className="bg-white text-blue-600 px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest shadow-lg shadow-black/10 active:scale-95 transition-transform"
+                >
+                  Install
+                </button>
+              </div>
             </motion.div>
           )}
         </AnimatePresence>
@@ -686,7 +808,11 @@ export default function App() {
           <div className="flex items-center gap-2 sm:gap-3 ml-auto">
             {isAuthReady && (
               user ? (
-                <div className="flex items-center gap-3 relative">
+                <div className="flex items-center gap-2 sm:gap-3 relative">
+                  <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 bg-blue-50 dark:bg-blue-900/30 rounded-xl border border-blue-100 dark:border-blue-800">
+                    <Zap size={14} className="text-blue-600 dark:text-blue-400" />
+                    <span className="text-xs font-black text-blue-700 dark:text-blue-300">{user.credits || 0}</span>
+                  </div>
                   <div className="relative">
                     <button 
                       className="h-9 w-9 rounded-full bg-blue-100 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-800 overflow-hidden shadow-sm cursor-pointer hover:ring-2 hover:ring-blue-500 transition-all flex items-center justify-center"
@@ -900,6 +1026,9 @@ export default function App() {
               onRefreshInsight={fetchAiInsight} 
               isInsightLoading={isInsightLoading} 
               onInstall={handleDirectInstall}
+              vitals={arduino.vitals}
+              healthStatus={arduino.healthStatus}
+              history={arduino.history}
             />
           ) : currentView === 'ai_nexus' ? (
             <DoctorianAI user={user} onUpdate={(u) => setUser(u)} onNavigate={setCurrentView} />
@@ -921,7 +1050,7 @@ export default function App() {
             animate={{ opacity: 1, x: 0 }}
             exit={{ opacity: 0, x: -20 }}
           >
-            <PatientMonitor />
+            <PatientMonitor arduino={arduino} />
           </motion.div>
         ) : currentView === 'features' ? (
           <motion.div
@@ -993,7 +1122,11 @@ export default function App() {
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -20 }}
           >
-            <Billing />
+            <Billing 
+              user={user} 
+              onUpdateUser={(u) => setUser(u)} 
+              onShowToast={(msg, type) => setToast({ message: msg, type: type as any })}
+            />
           </motion.div>
         ) : currentView === 'emergency' ? (
           <motion.div
@@ -1229,9 +1362,10 @@ export default function App() {
       </motion.div>
     )}
   </AnimatePresence>
+            <div className="flex-grow" />
+            <Footer onNavigate={(view) => setCurrentView(view)} />
+          </div>
         </div>
-        <Footer onNavigate={(view) => setCurrentView(view)} />
       </div>
-    </div>
-  );
+    );
 }

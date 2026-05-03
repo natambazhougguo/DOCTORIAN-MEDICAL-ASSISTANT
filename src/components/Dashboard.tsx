@@ -16,6 +16,10 @@ import {
 import BioSimulation from './BioSimulation';
 import { BioSecurity } from './BioSecurity';
 import { api } from '../api';
+import { WeatherWidget } from './WeatherWidget';
+import { AnomalyDetector } from './AnomalyDetector';
+import { Vitals, HealthStatus } from '../hooks/useArduino';
+import { VitalWaveform } from './VitalWaveform';
 
 const performanceData = [
   { time: '00:00', value: 82 },
@@ -41,6 +45,9 @@ interface DashboardProps {
   onRefreshInsight: () => void;
   isInsightLoading: boolean;
   onInstall: () => void;
+  vitals: Vitals | null;
+  healthStatus: HealthStatus | null;
+  history: Vitals[];
 }
 
 export const Dashboard: React.FC<DashboardProps> = ({ 
@@ -49,7 +56,10 @@ export const Dashboard: React.FC<DashboardProps> = ({
   aiInsight, 
   onRefreshInsight, 
   isInsightLoading,
-  onInstall
+  onInstall,
+  vitals,
+  healthStatus,
+  history
 }) => {
   const [tasks, setTasks] = useState<any[]>(() => {
     const saved = localStorage.getItem('doctorian_tasks');
@@ -394,6 +404,40 @@ export const Dashboard: React.FC<DashboardProps> = ({
 
         {/* Powerful Context Sidebar */}
         <div className="lg:col-span-4 flex flex-col gap-8">
+          {/* Real-time Heart Rate Stream */}
+          <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-[2.5rem] p-8 shadow-sm overflow-hidden relative group">
+            <div className="flex items-center justify-between mb-6">
+              <div>
+                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 text-high-visibility">Cardiac Pulse Registry</p>
+                <div className="flex items-baseline gap-2">
+                  <span className="text-3xl font-black text-slate-900 dark:text-white tracking-tighter text-high-visibility">{vitals?.heartRate || '--'}</span>
+                  <span className="text-xs font-bold text-slate-400 uppercase tracking-widest text-high-visibility">BPM</span>
+                </div>
+              </div>
+              <div className="p-3 bg-rose-50 dark:bg-rose-900/20 rounded-2xl text-rose-600 animate-pulse">
+                <Heart size={20} />
+              </div>
+            </div>
+            <div className="h-24 -mx-2">
+              <VitalWaveform 
+                data={history.map(h => h.heartRate)} 
+                color="#e11d48" 
+                height={96}
+                maxVal={180}
+              />
+            </div>
+            <div className="mt-4 flex items-center justify-between text-[8px] font-black uppercase tracking-widest text-slate-400 text-high-visibility">
+              <span>Sync Status: Secured</span>
+              <span className="flex items-center gap-1"><div className="w-1.5 h-1.5 rounded-full bg-emerald-500"></div> Connected</span>
+            </div>
+          </div>
+
+          {/* Anomaly Detection Hub */}
+          <AnomalyDetector vitals={vitals} healthStatus={healthStatus} />
+
+          {/* Weather Widget */}
+          <WeatherWidget />
+
           {/* Quick Actions Portal */}
           <div className="bg-slate-900 text-white rounded-[3rem] p-10 shadow-2xl relative overflow-hidden group">
             <div className="absolute top-0 right-0 p-8 opacity-10 group-hover:scale-110 transition-transform duration-700">

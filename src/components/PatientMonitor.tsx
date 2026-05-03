@@ -3,13 +3,14 @@ import {
   Wifi, Bluetooth, Play, Square, Thermometer,
   Heart, Droplets, Wind, Activity, AlertTriangle,
   CheckCircle, Info, Radio, Signal, XCircle, Monitor, Stethoscope, WifiOff,
-  Smartphone, MessageSquare, Phone, Cpu, Loader2, Zap, Settings, Brain, Sparkles, X
+  Smartphone, MessageSquare, Phone, Cpu, Loader2, Zap, Settings, Brain, Sparkles, X, PhoneCall, User
 } from 'lucide-react';
 import { useArduino, HealthStatus, Vitals } from '../hooks/useArduino';
 import { motion, AnimatePresence } from 'motion/react';
 import { api } from '../api';
 import { NeuralHealthSummary } from './NeuralHealthSummary';
 import { VitalWaveform } from './VitalWaveform';
+import { AnomalyDetector } from './AnomalyDetector';
 
 const VitalCard: React.FC<{
   icon: React.ReactNode;
@@ -238,12 +239,12 @@ const DiagnosticAnalysisView: React.FC<{ vitals: Vitals | null; history: Vitals[
   );
 };
 
-export const PatientMonitor: React.FC = () => {
+export const PatientMonitor: React.FC<{ arduino: any }> = ({ arduino }) => {
   const {
     vitals, history, healthStatus, connection,
     connectBluetooth, connectSerial, connectWiFi, disconnect, startDemo, simulateEmergency,
     error
-  } = useArduino();
+  } = arduino;
 
   const [wifiInput, setWifiInput] = useState('http://192.168.1.100');
   const [connectionTab, setConnectionTab] = useState<'bluetooth' | 'wifi' | 'serial'>('bluetooth');
@@ -1190,16 +1191,15 @@ export const PatientMonitor: React.FC = () => {
               )}
             </AnimatePresence>
 
-            {/* Health Status & Clinical Intel */}
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-8">
-              <div className="lg:col-span-2">
+            {/* Health Status & Anomaly Detection Matrix */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-12">
+              <div className="flex flex-col gap-8">
                 {healthStatus && <StatusBadge status={healthStatus} />}
-              </div>
-              <div className="bg-slate-950 text-white p-8 rounded-[2.5rem] border border-white/10 relative overflow-hidden group">
-                 <div className="absolute top-0 right-0 p-8 opacity-5">
+                <div className="bg-slate-950 text-white p-8 rounded-[2.5rem] border border-white/10 relative overflow-hidden group">
+                  <div className="absolute top-0 right-0 p-8 opacity-5">
                     <Monitor size={120} />
-                 </div>
-                 <div className="relative z-10">
+                  </div>
+                  <div className="relative z-10">
                     <h3 className="text-xs font-black text-blue-500 uppercase tracking-[0.2em] mb-6 flex items-center gap-2">
                        <Zap size={14} /> Clinical Intel
                     </h3>
@@ -1219,8 +1219,10 @@ export const PatientMonitor: React.FC = () => {
                           </div>
                        </div>
                     </div>
-                 </div>
+                  </div>
+                </div>
               </div>
+              <AnomalyDetector vitals={vitals} healthStatus={healthStatus} />
             </div>
 
             {/* Vital Cards Grid */}
@@ -1239,7 +1241,7 @@ export const PatientMonitor: React.FC = () => {
               />
               <VitalCard
                 icon={<Droplets />}
-                label="SpO2 Level"
+                label="Oxygen (SpO2)"
                 value={vitals ? Math.round(vitals.spo2).toString() : '--'}
                 unit="%"
                 color="text-emerald-600"
@@ -1251,7 +1253,7 @@ export const PatientMonitor: React.FC = () => {
               />
               <VitalCard
                 icon={<Thermometer />}
-                label="Temperature"
+                label="Body Temp"
                 value={vitals ? vitals.temperature.toFixed(1) : '--'}
                 unit="°C"
                 color="text-orange-600"
@@ -1340,34 +1342,28 @@ export const PatientMonitor: React.FC = () => {
                 </h3>
                 <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest bg-slate-50 px-3 py-1 rounded-full self-start sm:self-auto">Last {history.length} readings</span>
               </div>
-              <div className="overflow-x-auto no-scrollbar">
-                <div className="h-48 flex items-end gap-1.5 min-w-[300px]">
-                  {history.length > 0 ? history.map((h, i) => {
-                    const height = Math.max(5, ((h.heartRate - 40) / 140) * 100);
-                    const isHigh = h.heartRate > 100;
-                    const isLow = h.heartRate < 60;
-                    return (
-                      <motion.div
-                        key={i}
-                        initial={{ height: 0 }}
-                        animate={{ height: `${height}%` }}
-                        className="flex-1 rounded-t-lg transition-all duration-300"
-                        style={{
-                          backgroundColor: isHigh ? '#f43f5e' : isLow ? '#f59e0b' : '#3b82f6',
-                          opacity: 0.3 + (i / history.length) * 0.7,
-                        }}
-                      />
-                    );
-                  }) : (
-                    <div className="flex-1 flex items-center justify-center text-slate-300 text-sm font-bold italic">
-                      Waiting for data stream...
-                    </div>
-                  )}
-                </div>
+              <div className="h-64 flex items-center justify-center">
+                {history.length > 0 ? (
+                  <div className="w-full h-full">
+                    <VitalWaveform 
+                      data={history.map(h => h.heartRate)} 
+                      color="#2563eb"
+                      height={200}
+                      maxVal={180}
+                    />
+                  </div>
+                ) : (
+                  <div className="flex-1 flex items-center justify-center text-slate-300 text-sm font-bold italic">
+                    Waiting for neuro-link data stream...
+                  </div>
+                )}
               </div>
-              <div className="flex justify-between text-[10px] font-black text-slate-400 uppercase tracking-widest mt-6 px-2">
-                <span className="flex items-center gap-1.5"><div className="w-2 h-2 rounded-full bg-amber-500"></div> 60 bpm</span>
-                <span className="flex items-center gap-1.5"><div className="w-2 h-2 rounded-full bg-rose-500"></div> 100 bpm</span>
+              <div className="flex justify-between text-[10px] font-black text-slate-400 uppercase tracking-widest mt-6 px-4">
+                <div className="flex gap-8">
+                  <span className="flex items-center gap-2"><div className="w-2.5 h-2.5 rounded-full bg-blue-600 shadow-[0_0_8px_rgba(37,99,235,0.4)]"></div> Current Stream</span>
+                  <span className="flex items-center gap-2"><div className="w-2.5 h-2.5 rounded-full bg-rose-500 shadow-[0_0_8px_rgba(244,63,94,0.4)]"></div> Tachycardia Threshold</span>
+                </div>
+                <span>Sync Active</span>
               </div>
             </div>
 

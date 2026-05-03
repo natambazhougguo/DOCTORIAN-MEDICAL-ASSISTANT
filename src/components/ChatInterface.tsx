@@ -7,10 +7,11 @@ import {
   Bot, Layers, Zap, Image as ImageIcon, ArrowLeft, Fingerprint, 
   Database, Bold, Italic, Code, Search, PlusCircle, AlertCircle,
   Copy, Check, ThumbsUp, ThumbsDown, MessageSquarePlus,
-  Activity, Brain, Heart, Download, Paperclip, FileText
+  Activity, Brain, Heart, Download, Paperclip, FileText, Phone
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { api } from '../api';
+import { NeuralVoiceCall } from './NeuralVoiceCall';
 
 const SUGGESTIONS = [
   "What are the benefits of cold exposure?",
@@ -76,6 +77,8 @@ If a user asks about non-health topics, politely inform them that you are specia
 
 Do not mention your identity as an AI, your name (Doctorian AI), or your creator (AKORA JOSEPH) unless explicitly asked.
 
+Strictly answer The questions asked accordingly but not bringing other answers when not asked like for example the question that says "who are you?" should strictly be answered accoring to your name not proceeding to the person who created you.
+
 CREATOR INFORMATION (Only share if asked):
 - Creator: Akora Joseph
 - School: Dr. Obote College
@@ -90,7 +93,7 @@ Structure: As an all-residential school, fees include tuition, accommodation, an
 Variations: The final fee structure depends on the academic level (S.1–S.6) and often includes additional costs for uniforms, development fees, and personal items.
 Updates: Parents are advised to visit the Dr. Obote College Boroboro official portal or contact the school administration directly for the most current academic year fees. 
 URL: drobotecollege.sc.ug
- fetch the information from URL: drobotecollege.sc.ug and use it for selflearning for more accuracy and clearity
+ fetch the information from URL: drobotecollege.sc.ug and use it for self learning for more accuracy and clearity
 Respond with empathetic, evidence-based health insights.
 CRITICAL: Advise emergency services for severe symptoms. No prescriptions.`;
 
@@ -102,8 +105,9 @@ export function ChatInterface({ onMessageSent, isExploreView = false, user, forc
   const [temperature, setTemperature] = useState(0.7);
   const [activeModel, setActiveModel] = useState<'gemini-1.5-flash' | 'gemini-1.5-pro'>('gemini-1.5-flash');
   const [showSettings, setShowSettings] = useState(false);
-  const [isVoiceActive, setIsVoiceActive] = useState(false);
+  const [isVoiceActive, setIsVoiceActive] = useState(true); // Default to on for accessibility
   const [isSpeaking, setIsSpeaking] = useState(false);
+  const [showVoiceCallModal, setShowVoiceCallModal] = useState(false);
   const [terminalLogs, setTerminalLogs] = useState<string[]>(['STAT: Cognis baseline established', 'AUTH: RSA-4096 Secure']);
   const [isSidebarOpen, setIsSidebarOpen] = useState(!isExploreView);
   const [copiedId, setCopiedId] = useState<string | null>(null);
@@ -271,14 +275,19 @@ export function ChatInterface({ onMessageSent, isExploreView = false, user, forc
   };
 
   const speak = useCallback((text: string) => {
-    if (!('speechSynthesis' in window)) return;
+    if (!('speechSynthesis' in window) || !isVoiceActive) return;
     window.speechSynthesis.cancel();
     const utterance = new SpeechSynthesisUtterance(text);
+    // Use a natural sounding voice if available
+    const voices = window.speechSynthesis.getVoices();
+    const preferredVoice = voices.find(v => v.name.includes('Google') || v.name.includes('Natural')) || voices[0];
+    if (preferredVoice) utterance.voice = preferredVoice;
+    
     utterance.onstart = () => setIsSpeaking(true);
     utterance.onend = () => setIsSpeaking(false);
     utterance.onerror = () => setIsSpeaking(false);
     window.speechSynthesis.speak(utterance);
-  }, []);
+  }, [isVoiceActive]);
 
   const stopSpeaking = useCallback(() => {
     window.speechSynthesis.cancel();
@@ -342,8 +351,10 @@ export function ChatInterface({ onMessageSent, isExploreView = false, user, forc
     const textToSend = customInput || input;
     if (!textToSend.trim() || isLoading) return;
 
-    if (credits === 0 && user?.subscriptionTier === 'free') {
-      const errorMsg = "You have exhausted your free consultation credits. Please upgrade or purchase a credit bundle.";
+    const isPremium = user?.subscriptionTier === 'pro' || user?.subscriptionTier === 'enterprise';
+    
+    if (!isPremium && credits !== 'Unlimited' && Number(credits) <= 0) {
+      const errorMsg = "You have exhausted your free consultation credits. Please activate a Neural Framework protocol (upgrade) to continue.";
       setMessages(prev => [...prev, { 
         id: 'error-' + Date.now(),
         role: 'bot', 
@@ -351,6 +362,7 @@ export function ChatInterface({ onMessageSent, isExploreView = false, user, forc
         isError: true,
         timestamp: new Date() 
       }]);
+      setShowSettings(false);
       return;
     }
 
@@ -387,26 +399,32 @@ export function ChatInterface({ onMessageSent, isExploreView = false, user, forc
         : '';
       
       const systemInstruction = `${BASE_SYSTEM_INSTRUCTION}\n\nCURRENT SPECIALIZATION: ${personaInstruction}${fileContext}`;
-      const result = await api.ai.geminiChat(
+      
+      const stream = api.ai.geminiChatStream(
         [...messages, userMessage].map(m => ({
           role: m.role,
           text: m.text
         })),
         systemInstruction,
-        activeModel,
-        activePersona === 'support' ? 0.3 : temperature
+        activeModel === 'gemini-1.5-pro' ? 'pro' : 'flash', 
+        activePersona === 'support' ? 0.3 : temperature,
+        (meta) => {
+          if (meta.credits !== undefined) {
+            setCredits(meta.credits);
+          }
+        }
       );
 
-      setMessages(prev => prev.map(m => 
-        m.id === botMessageId ? { ...m, text: result.text, imageData: result.imageData } : m
-      ));
-
-      if (result.creditsRemaining !== undefined) {
-        setCredits(result.creditsRemaining);
+      let fullResponseText = "";
+      for await (const chunk of stream) {
+        fullResponseText += chunk;
+        setMessages(prev => prev.map(m => 
+          m.id === botMessageId ? { ...m, text: fullResponseText } : m
+        ));
       }
 
       setTerminalLogs(prev => [...prev.slice(-3), 'AI: Diagnostics synchronized']);
-      if (isVoiceActive) speak(result.text);
+      if (isVoiceActive) speak(fullResponseText);
 
     } catch (error: any) {
       console.error('Chat error:', error);
@@ -555,9 +573,23 @@ export function ChatInterface({ onMessageSent, isExploreView = false, user, forc
 
           <div className="flex items-center gap-2">
             <button 
-              onClick={() => setIsVoiceActive(!isVoiceActive)}
+              onClick={() => setShowVoiceCallModal(true)}
+              className="flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-[10px] font-black uppercase tracking-widest transition-all shadow-lg shadow-emerald-500/20 active:scale-95"
+              title="Start Neural Voice Call"
+            >
+              <Phone size={16} />
+              <span className="hidden sm:inline">Clinical Call</span>
+            </button>
+            <div className="h-6 w-px bg-slate-100 dark:bg-slate-800 mx-1" />
+            <button 
+              onClick={() => {
+                const newState = !isVoiceActive;
+                setIsVoiceActive(newState);
+                if (!newState) stopSpeaking();
+                else speak("Voice output enabled for accessibility.");
+              }}
               className={`p-2 rounded-lg transition-all ${isVoiceActive ? 'text-blue-600 bg-blue-50 dark:bg-blue-900/20' : 'text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'}`}
-              title="Voice Mode"
+              title="Voice Response Output"
             >
               {isVoiceActive ? <Volume2 size={18} /> : <VolumeX size={18} />}
             </button>
@@ -895,6 +927,15 @@ export function ChatInterface({ onMessageSent, isExploreView = false, user, forc
             <span className="text-[9px] font-black text-blue-600 uppercase tracking-widest">Neural Link Sync</span>
           </div>
         </div>
+        {/* Voice Call Modal Integration */}
+        <AnimatePresence>
+          {showVoiceCallModal && (
+            <NeuralVoiceCall 
+              user={user} 
+              onClose={() => setShowVoiceCallModal(false)} 
+            />
+          )}
+        </AnimatePresence>
       </div>
     </div>
   );

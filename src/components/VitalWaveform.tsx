@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import * as d3 from 'd3';
 
 interface VitalWaveformProps {
@@ -12,14 +12,38 @@ interface VitalWaveformProps {
 export const VitalWaveform: React.FC<VitalWaveformProps> = ({ 
   data, 
   color, 
-  width = 300, 
-  height = 80,
+  width: fixedWidth, 
+  height: fixedHeight = 80,
   maxVal = 200 
 }) => {
+  const containerRef = useRef<HTMLDivElement>(null);
   const svgRef = useRef<SVGSVGElement>(null);
+  const [dimensions, setDimensions] = useState({ width: fixedWidth || 0, height: fixedHeight });
 
   useEffect(() => {
-    if (!svgRef.current || data.length === 0) return;
+    if (fixedWidth) return;
+    
+    const observer = new ResizeObserver(entries => {
+      if (entries[0]) {
+        setDimensions({
+          width: entries[0].contentRect.width,
+          height: entries[0].contentRect.height || fixedHeight
+        });
+      }
+    });
+
+    if (containerRef.current) {
+      observer.observe(containerRef.current);
+    }
+
+    return () => observer.disconnect();
+  }, [fixedWidth, fixedHeight]);
+
+  useEffect(() => {
+    if (!svgRef.current || data.length === 0 || dimensions.width === 0) return;
+
+    const width = dimensions.width;
+    const height = dimensions.height;
 
     const svg = d3.select(svgRef.current);
     svg.selectAll("*").remove();
@@ -42,7 +66,7 @@ export const VitalWaveform: React.FC<VitalWaveformProps> = ({
     const line = d3.line<number>()
       .x((_, i) => x(i))
       .y(d => y(d))
-      .curve(d3.curveBasis);
+      .curve(d3.curveMonotoneX);
 
     // Add gradient
     const gradientId = `vital-gradient-${Math.random().toString(36).substr(2, 9)}`;
@@ -69,7 +93,7 @@ export const VitalWaveform: React.FC<VitalWaveformProps> = ({
       .x((_, i) => x(i))
       .y0(innerHeight)
       .y1(d => y(d))
-      .curve(d3.curveBasis);
+      .curve(d3.curveMonotoneX);
 
     g.append("path")
       .datum(data)
@@ -102,14 +126,16 @@ export const VitalWaveform: React.FC<VitalWaveformProps> = ({
       .attr("stroke-opacity", 0.1)
       .attr("stroke-dasharray", "2,2");
 
-  }, [data, color, width, height, maxVal]);
+  }, [data, color, dimensions, maxVal]);
 
   return (
-    <svg 
-      ref={svgRef} 
-      width={width} 
-      height={height} 
-      className="overflow-visible"
-    />
+    <div ref={containerRef} className="w-full h-full min-h-[40px]">
+      <svg 
+        ref={svgRef} 
+        width={dimensions.width} 
+        height={dimensions.height} 
+        className="overflow-visible"
+      />
+    </div>
   );
 };

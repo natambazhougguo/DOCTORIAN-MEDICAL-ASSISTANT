@@ -7,6 +7,8 @@ import {
 import { motion, AnimatePresence } from 'motion/react';
 import { api, User } from '../api';
 
+import { useFlutterwave, closePaymentModal } from 'flutterwave-react-v3';
+
 interface UpgradeModalProps {
   user: User | null;
   onClose: () => void;
@@ -48,7 +50,7 @@ export const UpgradeModal: React.FC<UpgradeModalProps> = ({ user, onClose, onUpd
       color: 'bg-blue-600',
       textColor: 'text-blue-600',
       buttonText: 'Upgrade to Pro',
-      active: user?.subscriptionTier === 'pro' || user?.subscriptionTier === 'silver',
+      active: ['pro', 'silver', 'enterprise', 'business'].includes(user?.subscriptionTier || ''),
       highlight: true
     },
     {
@@ -95,13 +97,9 @@ export const UpgradeModal: React.FC<UpgradeModalProps> = ({ user, onClose, onUpd
     }
   ];
 
-  const [evidence, setEvidence] = useState('');
-  const [phone, setPhone] = useState(user?.email?.match(/^\d+$/) ? user.email : '');
-  const [currency, setCurrency] = useState('UGX');
+  const [currency, setCurrency] = useState('USD');
   const [selectedTier, setSelectedTier] = useState<any>(null);
   const [success, setSuccess] = useState(false);
-  const [paymentStep, setPaymentStep] = useState<'plan' | 'payment'>('plan');
-  const [externalId, setExternalId] = useState<string | null>(null);
 
   const currencies = [
     { code: 'UGX', label: 'UGX (Uganda)' },
@@ -110,61 +108,70 @@ export const UpgradeModal: React.FC<UpgradeModalProps> = ({ user, onClose, onUpd
     { code: 'EUR', label: 'EUR (Europe)' },
   ];
 
-  const handleInitiatePayment = async () => {
-    if (!selectedTier || !user || !phone) return;
-    
-    setLoading(selectedTier.id);
-    try {
-      const amount = parseInt(selectedTier.price.replace(',', ''));
-      const res = await fetch('/api/payment/mtn/initiate', {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ phone, amount, currency, tier: selectedTier.id }),
-      });
-      const data = await res.json();
-      
-      if (data.success) {
-        setExternalId(data.externalId);
-        // Start polling for status
-        pollStatus(data.externalId);
-      } else {
-        throw new Error(data.error);
-      }
-    } catch (err) {
-      console.error("Payment initiation failed:", err);
-    } finally {
-      setLoading(null);
-    }
+  const flutterwavePublicKey = (import.meta as any).env.VITE_FLUTTERWAVE_PUBLIC_KEY || 'FLWPUBK_TEST-SANDBOX-KEY';
+
+  const config = {
+    public_key: flutterwavePublicKey,
+    tx_ref: `DOCTORIAN-${Date.now()}`,
+    amount: selectedTier ? (parseInt(selectedTier.id.startsWith('bundle') ? (selectedTier.price.replace(',', '')) : (selectedTier.price.replace(',', ''))) / (currency === 'UGX' ? 1 : (currency === 'USD' ? 3800 : 3800))) : 0, 
+    currency: currency,
+    payment_options: 'card,mobilemoney,ussd',
+    customer: {
+      email: user?.email || 'patient@doctorian.ai',
+      phone_number: '',
+      name: user?.displayName || 'Valued Patient',
+    },
+    customizations: {
+      title: 'Doctorian AI Protocol',
+      description: `Activation of ${selectedTier?.name} Neural Framework`,
+      logo: 'https://doctorian.ai/logo.svg',
+    },
   };
 
-  const [paymentStatus, setPaymentStatus] = useState<'idle' | 'pending' | 'processing' | 'verifying' | 'completed' | 'failed'>('idle');
+  if (currency === 'UGX') {
+    config.amount = selectedTier ? parseInt(selectedTier.price.replace(',', '')) : 0;
+  } else if (currency === 'USD') {
+     // Approx conversion if prices are in UGX in the tiers object
+     config.amount = selectedTier ? Math.ceil(parseInt(selectedTier.price.replace(',', '')) / 3800) : 0;
+  }
 
-  const pollStatus = async (id: string) => {
-    setPaymentStatus('processing');
-    const interval = setInterval(async () => {
-      try {
-        const res = await fetch(`/api/payment/mtn/status/${id}`);
-        const data = await res.json();
-        
-        if (data.status === 'completed') {
-          clearInterval(interval);
-          setPaymentStatus('completed');
-          setSuccess(true);
-          // Refresh user data
-          const userRes = await fetch('/api/auth/me');
-          const userData = await userRes.json();
-          if (userData.user) onUpdate(userData.user);
-        } else if (data.status === 'failed') {
-          clearInterval(interval);
-          setPaymentStatus('failed');
-        } else {
-          // If still pending after some time, show that we are verifying
-          setPaymentStatus('verifying');
+  const handleFlutterPayment = useFlutterwave(config);
+
+  const handleUpgrade = () => {
+    if (!selectedTier || !user) return;
+    setLoading(selectedTier.id);
+
+    handleFlutterPayment({
+      callback: async (response) => {
+        if (response.status === "successful" || response.status === "completed") {
+          try {
+            const planId = selectedTier.id === 'pro' ? 'catalyst' : (selectedTier.id === 'business' ? 'quantum' : selectedTier.id);
+            const res = await fetch('/api/billing/subscribe', {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ 
+                planId,
+                externalId: response.transaction_id.toString()
+              }),
+            });
+            const data = await res.json();
+            if (data.success) {
+              setSuccess(true);
+              const userRes = await fetch('/api/auth/me');
+              const userData = await userRes.json();
+              if (userData.user) onUpdate(userData.user);
+            }
+          } catch (err) {
+            console.error("Subscription update failed:", err);
+          }
         }
-      } catch (err) {
-        console.error("Polling failed:", err);
-      }
-    }, 3000);
+        closePaymentModal();
+        setLoading(null);
+      },
+      onClose: () => {
+        setLoading(null);
+      },
+    });
   };
 
   const whatsappLink = `https://wa.me/256787674140?text=Hello Doctorian Admin, I have just initiated a ${selectedTier?.name || 'Pro'} upgrade and submitted my evidence. Please verify.`;
@@ -368,8 +375,6 @@ export const UpgradeModal: React.FC<UpgradeModalProps> = ({ user, onClose, onUpd
                 <button 
                   onClick={() => {
                     setSelectedTier(null);
-                    setExternalId(null);
-                    setPaymentStatus('idle');
                   }}
                   className="flex items-center gap-2 text-[10px] font-black text-slate-400 uppercase tracking-widest mb-8 hover:text-slate-900 dark:hover:text-white transition-colors"
                 >
@@ -377,108 +382,52 @@ export const UpgradeModal: React.FC<UpgradeModalProps> = ({ user, onClose, onUpd
                 </button>
 
                 <div className="p-8 bg-slate-50 dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-[2.5rem] mb-8">
-                   <h4 className="text-xl font-black text-slate-900 dark:text-white uppercase mb-4">Neural Payment Link</h4>
+                   <h4 className="text-xl font-black text-slate-900 dark:text-white uppercase mb-4">Neural Gateway</h4>
                    
-                   {!externalId ? (
-                     <div className="space-y-6">
-                        <p className="text-sm font-medium text-slate-600 dark:text-slate-400 leading-relaxed">
-                          Enter your MTN/Airtel number to initiate a secure transaction prompt directly on your device.
-                        </p>
-                        
-                        <div className="space-y-4">
-                          <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest pl-2">Phone Number (MoMo)</label>
-                          <input 
-                            type="text"
-                            value={phone}
-                            onChange={(e) => setPhone(e.target.value)}
-                            placeholder="+256..."
-                            className="w-full bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 text-sm font-bold focus:ring-2 focus:ring-blue-500 outline-none transition-all"
-                          />
+                   <div className="space-y-6">
+                      <p className="text-sm font-medium text-slate-600 dark:text-slate-400 leading-relaxed">
+                        You are about to activate the <span className="font-bold text-blue-600">{selectedTier?.name}</span> protocol for <span className="font-bold">{currency === 'USD' ? '$' : ''}{config.amount} {currency}</span>. 
+                      </p>
+                      
+                      <div className="p-4 bg-white dark:bg-slate-800 rounded-2xl border border-slate-100 dark:border-slate-700 flex flex-col gap-2">
+                        <div className="flex justify-between text-[10px] font-black uppercase tracking-widest">
+                          <span className="text-slate-400">Recipient</span>
+                          <span className="text-slate-900 dark:text-white">Doctorian AI Suite</span>
                         </div>
-
-                        <button
-                          disabled={!phone || loading !== null}
-                          onClick={handleInitiatePayment}
-                          className="w-full py-4 bg-blue-600 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest shadow-xl shadow-blue-500/20 active:scale-95 flex items-center justify-center gap-2 transition-all hover:bg-blue-700 disabled:opacity-50"
-                        >
-                          {loading ? (
-                            <>
-                              <Loader2 size={16} className="animate-spin" />
-                              Verifying Neural Link...
-                            </>
-                          ) : (
-                            'Initiate Secure MoMo Prompt'
-                          )}
-                        </button>
-                     </div>
-                   ) : (
-                     <div className="text-center py-8">
-                        <div className="relative mx-auto mb-8 w-24 h-24">
-                          <div className={`absolute inset-0 rounded-full border-4 border-slate-200 dark:border-slate-800 ${paymentStatus === 'failed' ? 'border-rose-100' : ''}`} />
-                          <motion.div 
-                            animate={{ rotate: 360 }}
-                            transition={{ duration: 2, repeat: Infinity, ease: "linear" }}
-                            className={`absolute inset-0 rounded-full border-4 border-transparent border-t-blue-600 ${paymentStatus === 'failed' ? 'border-t-rose-600' : ''}`}
-                          />
-                          <div className="absolute inset-0 flex items-center justify-center">
-                            {paymentStatus === 'verifying' ? (
-                              <RefreshCw className="text-blue-600 animate-spin" size={32} />
-                            ) : paymentStatus === 'failed' ? (
-                              <X className="text-rose-600" size={32} />
-                            ) : (
-                              <CreditCard className="text-blue-600" size={32} />
-                            )}
-                          </div>
+                        <div className="flex justify-between text-[10px] font-black uppercase tracking-widest">
+                          <span className="text-slate-400">Network</span>
+                          <span className="text-slate-900 dark:text-white">Secure Global Mesh</span>
                         </div>
+                      </div>
 
-                        <h5 className="text-lg font-black text-slate-900 dark:text-white uppercase mb-2">
-                          {paymentStatus === 'verifying' ? 'Verifying Neural Pulse' : 
-                           paymentStatus === 'failed' ? 'Transaction Interrupted' :
-                           'Awaiting PIN Input'}
-                        </h5>
-                        
-                        <p className="text-xs font-medium text-slate-500 mb-6 leading-relaxed">
-                          {paymentStatus === 'verifying' ? 'Securing your neural link. Please hold...' :
-                           paymentStatus === 'failed' ? 'The transaction was unsuccessful. Please check your balance or try again.' :
-                           <>We've sent a secure PIN prompt to <span className="font-bold text-slate-900 dark:text-white">{phone}</span>. Please verify on your phone.</>}
-                        </p>
-
-                        <div className="flex flex-col items-center gap-3">
-                          <div className="px-4 py-2 bg-white dark:bg-slate-800 rounded-lg border border-slate-100 dark:border-slate-800 inline-block transition-all">
-                             <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest leading-none">REF: {externalId}</span>
-                          </div>
-                          
-                          <div className="flex items-center gap-2 mt-2">
-                            <div className={`w-2 h-2 rounded-full ${paymentStatus === 'verifying' ? 'bg-blue-600 animate-pulse' : 'bg-slate-300'}`} />
-                            <div className={`w-2 h-2 rounded-full ${paymentStatus === 'completed' ? 'bg-emerald-600' : 'bg-slate-300'}`} />
-                          </div>
-                        </div>
-
-                        {paymentStatus === 'failed' && (
-                          <button 
-                            onClick={() => {
-                              setExternalId(null);
-                              setPaymentStatus('idle');
-                            }}
-                            className="mt-8 text-[10px] font-black text-blue-600 uppercase underline"
-                          >
-                            Try a different method
-                          </button>
+                      <button
+                        onClick={handleUpgrade}
+                        className="w-full py-4 bg-blue-600 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest shadow-xl shadow-blue-500/20 active:scale-95 flex items-center justify-center gap-2 transition-all hover:bg-blue-700 disabled:opacity-50"
+                      >
+                        {loading === selectedTier?.id ? (
+                          <>
+                            <Loader2 size={16} className="animate-spin" />
+                            Establishing Secure Link...
+                          </>
+                        ) : (
+                          <>
+                            <CreditCard size={16} />
+                            Authorize Payment
+                          </>
                         )}
-                     </div>
-                   )}
+                      </button>
+                   </div>
                 </div>
 
                 <div className="p-6 bg-blue-50/50 dark:bg-blue-900/10 rounded-2xl border border-dashed border-blue-200 dark:border-blue-800">
                   <div className="flex items-start gap-3">
                     <Shield size={16} className="text-emerald-500 shrink-0" />
                     <div>
-                      <p className="text-[10px] font-black text-slate-900 dark:text-white uppercase tracking-tight mb-1">Direct Verification Active</p>
-                      <p className="text-[9px] font-bold text-slate-500 uppercase leading-tight">Transactions are processed through Akora Joseph's neural gateway at 0787 674140. Neural link activation is automatic upon PIN entry.</p>
+                      <p className="text-[10px] font-black text-slate-900 dark:text-white uppercase tracking-tight mb-1">Flutterwave Protection Active</p>
+                      <p className="text-[9px] font-bold text-slate-500 uppercase leading-tight">Your transaction is encrypted at the hardware level. Neural link activation is instantaneous upon successful gateway authorization.</p>
                     </div>
                   </div>
                 </div>
-                <p className="text-[9px] font-bold text-center text-slate-400 uppercase mt-4">Manual verification takes 5-10 minutes usually</p>
               </motion.div>
             )}
 

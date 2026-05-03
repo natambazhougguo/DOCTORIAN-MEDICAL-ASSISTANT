@@ -65,7 +65,7 @@ export function DoctorianAI({ user, onUpdate, onNavigate }: DoctorianAIProps) {
   const [isGeneratingIdea, setIsGeneratingIdea] = useState(false);
 
   const fetchOperationalIdea = async () => {
-    if (user?.subscriptionTier !== 'gold' || user?.subscriptionStatus !== 'active') return;
+    if (user?.subscriptionTier !== 'enterprise' || user?.subscriptionStatus !== 'active') return;
     setIsGeneratingIdea(true);
     try {
       const idea = await api.auth.generateOperationalIdea();
@@ -79,9 +79,9 @@ export function DoctorianAI({ user, onUpdate, onNavigate }: DoctorianAIProps) {
 
   useEffect(() => {
     const interval = setInterval(() => {
-      const isSilver = user?.subscriptionTier === 'silver' && user?.subscriptionStatus === 'active';
-      const isGold = user?.subscriptionTier === 'gold' && user?.subscriptionStatus === 'active';
-      const baseLatency = isGold ? 4 : isSilver ? 8 : 12;
+      const isPro = user?.subscriptionTier === 'pro' && user?.subscriptionStatus === 'active';
+      const isEnterprise = user?.subscriptionTier === 'enterprise' && user?.subscriptionStatus === 'active';
+      const baseLatency = isEnterprise ? 4 : isPro ? 8 : 12;
 
       setStats(prev => ({
         latency: Math.max(baseLatency - 2, Math.min(baseLatency + 5, prev.latency + (Math.random() > 0.5 ? 1 : -1))),
@@ -91,7 +91,7 @@ export function DoctorianAI({ user, onUpdate, onNavigate }: DoctorianAIProps) {
       }));
     }, 3000);
     return () => clearInterval(interval);
-  }, [user?.subscriptionTier]);
+  }, [user?.subscriptionTier, user?.subscriptionStatus]);
 
   const quickTools = [
     { label: 'Diagnostic Lab', description: 'Deep symptom mapping and pathology analysis', icon: <Stethoscope size={24} />, view: 'symptoms', color: 'text-blue-500', bg: 'bg-blue-50 dark:bg-blue-900/20' },
@@ -104,9 +104,9 @@ export function DoctorianAI({ user, onUpdate, onNavigate }: DoctorianAIProps) {
   ];
 
   return (
-    <div className="flex flex-col min-h-[calc(100vh-8rem)] bg-white dark:bg-slate-900 rounded-[3rem] border border-slate-100 dark:border-slate-800 shadow-2xl overflow-hidden mb-12 transition-all">
+    <div className="flex flex-col h-[calc(100vh-10rem)] bg-white dark:bg-slate-900 rounded-[2rem] sm:rounded-[3rem] border border-slate-100 dark:border-slate-800 shadow-2xl overflow-hidden mb-8 sm:mb-12 transition-all">
       <AnimatePresence>
-        {user?.subscriptionTier === 'gold' && user?.subscriptionStatus === 'active' && (
+        {user?.subscriptionTier === 'enterprise' && user?.subscriptionStatus === 'active' && (
           <motion.div 
             initial={{ opacity: 0, y: -20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -114,8 +114,8 @@ export function DoctorianAI({ user, onUpdate, onNavigate }: DoctorianAIProps) {
           >
             <div className="flex items-center gap-3">
               <Crown className="text-amber-300" size={18} />
-              <span className="text-[10px] font-black text-white uppercase tracking-widest hidden sm:inline">Operational Health Matrix Active</span>
-              <span className="text-[10px] font-black text-white uppercase tracking-widest sm:hidden">Neural Link: Elite</span>
+              <span className="text-[10px] font-black text-white uppercase tracking-widest hidden sm:inline">Universal Quantum Node Active</span>
+              <span className="text-[10px] font-black text-white uppercase tracking-widest sm:hidden">Neural Link: Quantum</span>
             </div>
             <div className="flex items-center gap-4">
                <div className="hidden md:flex items-center gap-2 px-3 py-1 bg-white/10 rounded-lg max-w-[200px] sm:max-w-[400px] overflow-hidden">
@@ -308,7 +308,7 @@ export function DoctorianAI({ user, onUpdate, onNavigate }: DoctorianAIProps) {
                    <p className="text-slate-500 dark:text-slate-400 mt-4 text-base sm:text-lg font-bold max-w-2xl leading-relaxed">Access specialized clinical modules for deep anatomical mapping and predictive health modeling.</p>
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 sm:gap-6">
+                <div className="grid grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-6">
                   {quickTools.map((tool, i) => (
                     <button
                       key={i}
@@ -318,20 +318,20 @@ export function DoctorianAI({ user, onUpdate, onNavigate }: DoctorianAIProps) {
                         else if (tool.view === 'summary') setShowNeuralSummary(true);
                         else if (onNavigate) onNavigate(tool.view);
                       }}
-                      className="p-6 sm:p-8 bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-[2rem] sm:rounded-[2.5rem] hover:border-blue-500/50 hover:shadow-2xl hover:shadow-blue-500/10 transition-all text-left group relative overflow-hidden"
+                      className="p-4 sm:p-8 bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-[1.5rem] sm:rounded-[2.5rem] hover:border-blue-500/50 hover:shadow-2xl hover:shadow-blue-500/10 transition-all text-left group relative overflow-hidden"
                     >
                       <div className={`absolute -right-4 -top-4 w-24 h-24 ${tool.bg} rounded-full blur-3xl opacity-0 group-hover:opacity-100 transition-opacity`} />
                       
-                      <div className={`w-12 h-12 sm:w-14 sm:h-14 ${tool.bg} ${tool.color} rounded-xl sm:rounded-2xl flex items-center justify-center mb-6 sm:mb-8 group-hover:scale-110 group-hover:rotate-3 transition-transform relative z-10`}>
-                        {React.cloneElement(tool.icon as any, { size: 24 })}
+                      <div className={`w-10 h-10 sm:w-14 sm:h-14 ${tool.bg} ${tool.color} rounded-xl sm:rounded-2xl flex items-center justify-center mb-4 sm:mb-8 group-hover:scale-110 group-hover:rotate-3 transition-transform relative z-10`}>
+                        {React.cloneElement(tool.icon as any, { size: 20 })}
                       </div>
                       
                       <div className="relative z-10">
-                        <h5 className="text-base sm:text-lg font-black text-slate-900 dark:text-white uppercase tracking-tight mb-2 flex items-center justify-between text-high-visibility">
+                        <h5 className="text-[14px] sm:text-lg font-black text-slate-900 dark:text-white uppercase tracking-tight mb-1 sm:mb-2 flex items-center justify-between text-high-visibility leading-tight">
                           {tool.label}
-                          <ChevronRight size={20} className="sm:size-18 opacity-0 group-hover:opacity-100 transform translate-x-[-10px] group-hover:translate-x-0 transition-all" />
+                          <ChevronRight size={16} className="hidden sm:block opacity-0 group-hover:opacity-100 transform translate-x-[-10px] group-hover:translate-x-0 transition-all" />
                         </h5>
-                        <p className="text-[12px] sm:text-[11px] font-bold text-slate-500 dark:text-slate-400 leading-relaxed uppercase tracking-wide">{tool.description}</p>
+                        <p className="text-[9px] sm:text-[11px] font-bold text-slate-500 dark:text-slate-400 leading-relaxed uppercase tracking-wide line-clamp-2">{tool.description}</p>
                       </div>
                     </button>
                   ))}
