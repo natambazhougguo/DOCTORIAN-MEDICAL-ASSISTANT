@@ -1,6 +1,6 @@
 # Doctorian AI - Local Setup Guide
 
-This project was developed by **AKORA JOSEPH** from **Dr. Obote College**. It is a professional medical intelligence companion designed to provide evidence-based health insights.
+This project was developed by **NATAMBA ZHOUGGUO** from **Dr. Obote College**. It is a professional medical intelligence companion designed to provide evidence-based health insights.
 
 ## Prerequisites
 
@@ -48,7 +48,7 @@ This project was developed by **AKORA JOSEPH** from **Dr. Obote College**. It is
 - **Anatomical Illustrator**: AI-generated medical illustrations.
 
 ---
-*Developed by AKORA JOSEPH (Dr. Obote College)*
+*Developed by NATAMBA ZHOUGGUO (Dr. Obote College)*
 *Headteacher: Mr. ALENGO DICK*
 *Deputy Administration: Mr. Ogwang Tom*
 *Deputy in charge Academics: Mr. Okumu Samuel*
