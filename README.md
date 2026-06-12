@@ -54,3 +54,4 @@ This project was developed by **NATAMBA ZHOUGGUO** from **Dr. Obote College**. I
 *Deputy in charge Academics: Mr. Okumu Samuel*
 *Deputy in charge Welfare: Mr. Epilla Banana Andrew*
 *Head of ICT: Mr. ANGURA JAMES*
+OKILO
